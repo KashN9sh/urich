@@ -44,6 +44,7 @@ nav:
   - Examples:
     - Ecommerce: examples/ecommerce.md
   - CLI: cli.md
+  - Community: community.md
 
 markdown_extensions:
   - pymdownx.highlight:

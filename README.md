@@ -2,7 +2,7 @@
 
 Async DDD framework for microservices on Starlette.
 
-**Documentation:** [kashn9sh.github.io/urich](https://kashn9sh.github.io/urich)
+**Documentation:** [kashn9sh.github.io/urich](https://kashn9sh.github.io/urich) · **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md) · **Community & promotion:** [docs/community.md](https://kashn9sh.github.io/urich/community/)
 
 The application is composed from module objects via `app.register(module)` — similar to FastAPI with routers, but one consistent style for domain, events, RPC and discovery.
 
