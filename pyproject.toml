@@ -12,14 +12,6 @@ dependencies = [
     "starlette>=0.41.0",
     "pydantic>=2.0",
 ]
-
-[project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio", "httpx", "uvicorn"]
-cli = ["typer>=0.9.0"]
-
-[project.urls]
-Homepage = "https://github.com/KashN9sh/urich"
-Repository = "https://github.com/KashN9sh/urich"
 keywords = ["asgi", "ddd", "microservices", "starlette", "cqrs"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -30,6 +22,14 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "httpx", "uvicorn"]
+cli = ["typer>=0.9.0"]
+
+[project.urls]
+Homepage = "https://github.com/KashN9sh/urich"
+Repository = "https://github.com/KashN9sh/urich"
 
 [project.scripts]
 urich = "urich.cli.main:main"
