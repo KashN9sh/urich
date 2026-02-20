@@ -20,6 +20,7 @@ class Application:
         self._starlette = Starlette(routes=[])
         self._modules: list[Module] = []
         self._container = Container()
+        self._route_schemas: dict[tuple[str, str], dict[str, Any]] = {}  # (path, method) -> OpenAPI op extras
         if config is not None:
             self._container.register_instance(type(config), config)
             self._container.register_instance("config", config)
@@ -30,12 +31,31 @@ class Application:
         self._modules.append(module)
         return self
 
-    def add_route(self, path: str, endpoint: Any, methods: list[str] | None = None) -> None:
-        """Add an HTTP route. Called by modules from register_into."""
+    def add_route(
+        self,
+        path: str,
+        endpoint: Any,
+        methods: list[str] | None = None,
+        *,
+        openapi_body_schema: dict[str, Any] | None = None,
+        openapi_parameters: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """Add an HTTP route. Optional openapi_body_schema / openapi_parameters for Swagger."""
         if methods is None:
             methods = ["GET"]
         route = Route(path, endpoint, methods=methods)
         self._starlette.routes.append(route)
+        for method in methods:
+            key = (path, method.lower())
+            if key not in self._route_schemas:
+                self._route_schemas[key] = {}
+            if method.lower() == "get" and openapi_parameters is not None:
+                self._route_schemas[key]["parameters"] = openapi_parameters
+            if method.lower() == "post" and openapi_body_schema is not None:
+                self._route_schemas[key]["requestBody"] = {
+                    "required": True,
+                    "content": {"application/json": {"schema": openapi_body_schema}},
+                }
 
     def mount(self, path: str, app: Starlette) -> None:
         """Mount a sub-app at prefix. Called by modules from register_into."""
@@ -54,7 +74,12 @@ class Application:
         from urich.core.openapi import build_openapi_spec, SWAGGER_UI_HTML
         from starlette.responses import HTMLResponse, JSONResponse
 
-        spec = build_openapi_spec(self._starlette.routes, title=title, version=version)
+        spec = build_openapi_spec(
+            self._starlette.routes,
+            title=title,
+            version=version,
+            route_schemas=self._route_schemas,
+        )
         self._openapi_spec = spec  # type: ignore[attr-defined]
 
         async def openapi_endpoint(request: Any) -> Any:

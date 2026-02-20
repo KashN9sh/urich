@@ -28,7 +28,7 @@ from orders.module import orders_module
 app = Application()
 app.register(orders_module)
 
-# Run: uvicorn main:app --reload
+# Run: python -m uvicorn main:app --reload  (or: pip install uvicorn && uvicorn main:app --reload)
 ```
 
 Routes by convention: `POST /orders/commands/create_order`, `GET /orders/queries/get_order`.

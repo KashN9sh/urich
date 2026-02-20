@@ -12,6 +12,7 @@ from starlette.responses import JSONResponse, Response
 
 from urich.core.app import Application
 from urich.core.module import Module
+from urich.core.openapi import parameters_from_dataclass, schema_from_dataclass
 from urich.domain import AggregateRoot, DomainEvent, Repository
 from urich.domain.events import EventBus
 from urich.ddd.commands import Command, Query
@@ -80,15 +81,25 @@ class DomainModule(Module):
         for cmd_type, handler in self._commands:
             if isinstance(handler, type):
                 container.register_class(handler)
-            # route: POST /prefix/commands/CreateOrder -> cmd_type, handler
             path = f"{self.prefix.rstrip('/')}/commands/{_snake(cmd_type.__name__)}"
-            app.add_route(path, self._make_command_endpoint(cmd_type, handler, container), methods=["POST"])
+            app.add_route(
+                path,
+                self._make_command_endpoint(cmd_type, handler, container),
+                methods=["POST"],
+                openapi_body_schema=schema_from_dataclass(cmd_type),
+            )
 
         for query_type, handler in self._queries:
             if isinstance(handler, type):
                 container.register_class(handler)
             path = f"{self.prefix.rstrip('/')}/queries/{_snake(query_type.__name__)}"
-            app.add_route(path, self._make_query_endpoint(query_type, handler, container), methods=["GET", "POST"])
+            app.add_route(
+                path,
+                self._make_query_endpoint(query_type, handler, container),
+                methods=["GET", "POST"],
+                openapi_parameters=parameters_from_dataclass(query_type),
+                openapi_body_schema=schema_from_dataclass(query_type),
+            )
 
     def _make_command_endpoint(
         self, cmd_type: Type[Command], handler: Type[Any] | Callable[..., Any], container: Any
