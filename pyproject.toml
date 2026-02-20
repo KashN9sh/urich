@@ -29,7 +29,8 @@ cli = ["typer>=0.9.0"]
 docs = ["mkdocs>=1.5", "mkdocs-material>=9.5"]
 
 [project.urls]
-Homepage = "https://github.com/KashN9sh/urich"
+Homepage = "https://kashn9sh.github.io/urich"
+Documentation = "https://kashn9sh.github.io/urich"
 Repository = "https://github.com/KashN9sh/urich"
 
 [project.scripts]
