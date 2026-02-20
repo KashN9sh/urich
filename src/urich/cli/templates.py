@@ -122,7 +122,7 @@ from urich import Application
 app = Application()
 # app.register({first_context}_module)
 
-# Run: uvicorn main:app.starlette --reload
+# Run: uvicorn main:app --reload
 '''
 
 CONTEXT_SKELETON = '''"""Domain {context}."""

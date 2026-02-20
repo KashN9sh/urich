@@ -1,7 +1,7 @@
 """
 Minimal run: Application + orders DomainModule only.
-To run: uvicorn run_minimal:app.starlette --reload
-Or: python -c "from run_minimal import app; import uvicorn; uvicorn.run(app.starlette)"
+To run: uvicorn run_minimal:app --reload
+Or: python -c "from run_minimal import app; import uvicorn; uvicorn.run(app)"
 """
 import sys
 from pathlib import Path

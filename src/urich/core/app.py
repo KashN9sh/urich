@@ -49,5 +49,9 @@ class Application:
 
     @property
     def starlette(self) -> Starlette:
-        """ASGI app for uvicorn: uvicorn.run(app.starlette)."""
+        """Underlying Starlette ASGI app (e.g. for middleware)."""
         return self._starlette
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        """ASGI: uvicorn.run(app) works directly."""
+        await self._starlette(scope, receive, send)
