@@ -39,8 +39,9 @@ class Application:
         *,
         openapi_body_schema: dict[str, Any] | None = None,
         openapi_parameters: list[dict[str, Any]] | None = None,
+        openapi_tags: list[str] | None = None,
     ) -> None:
-        """Add an HTTP route. Optional openapi_body_schema / openapi_parameters for Swagger."""
+        """Add an HTTP route. Optional openapi_* for Swagger (schemas, parameters, tags for grouping)."""
         if methods is None:
             methods = ["GET"]
         route = Route(path, endpoint, methods=methods)
@@ -56,6 +57,8 @@ class Application:
                     "required": True,
                     "content": {"application/json": {"schema": openapi_body_schema}},
                 }
+            if openapi_tags is not None:
+                self._route_schemas[key]["tags"] = openapi_tags
 
     def mount(self, path: str, app: Starlette) -> None:
         """Mount a sub-app at prefix. Called by modules from register_into."""

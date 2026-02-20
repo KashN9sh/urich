@@ -87,6 +87,7 @@ class DomainModule(Module):
                 self._make_command_endpoint(cmd_type, handler, container),
                 methods=["POST"],
                 openapi_body_schema=schema_from_dataclass(cmd_type),
+                openapi_tags=[self.name],
             )
 
         for query_type, handler in self._queries:
@@ -99,6 +100,7 @@ class DomainModule(Module):
                 methods=["GET", "POST"],
                 openapi_parameters=parameters_from_dataclass(query_type),
                 openapi_body_schema=schema_from_dataclass(query_type),
+                openapi_tags=[self.name],
             )
 
     def _make_command_endpoint(

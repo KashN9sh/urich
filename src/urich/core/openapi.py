@@ -109,12 +109,16 @@ def build_openapi_spec(
                     op["requestBody"] = schema["requestBody"]
                 if "parameters" in schema:
                     op["parameters"] = schema["parameters"]
-            elif method_lower == "post" and "/commands/" in path:
+                if "tags" in schema:
+                    op["tags"] = schema["tags"]
+            if "tags" not in op:
+                op["tags"] = ["default"]
+            if method_lower == "post" and "/commands/" in path and "requestBody" not in op:
                 op["requestBody"] = {
                     "required": True,
                     "content": {"application/json": {"schema": {"type": "object"}}},
                 }
-            elif method_lower == "get" and "/queries/" in path:
+            elif method_lower == "get" and "/queries/" in path and "parameters" not in op:
                 op["parameters"] = [{"name": "query params", "in": "query", "schema": {"type": "object"}}]
             paths[path][method_lower] = op
     return {
