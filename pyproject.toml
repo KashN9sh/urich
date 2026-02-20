@@ -26,7 +26,7 @@ classifiers = [
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio", "httpx", "uvicorn"]
 cli = ["typer>=0.9.0"]
-docs = ["mkdocs>=1.5", "mkdocs-material>=9.5"]
+docs = ["mkdocs>=2", "pymdown-extensions"]
 
 [project.urls]
 Homepage = "https://kashn9sh.github.io/urich"

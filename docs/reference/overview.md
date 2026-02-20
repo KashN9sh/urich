@@ -85,4 +85,4 @@ Main public types and where to import them from. For full signatures, see the so
 
 ## CLI
 
-Entry point: `urich` (after `pip install "urich[cli]"`). Commands: `create-app`, `add-context`, `add-aggregate`. See [CLI](cli.md).
+Entry point: `urich` (after `pip install "urich[cli]"`). Commands: `create-app`, `add-context`, `add-aggregate`. See [CLI](../cli.md).
