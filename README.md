@@ -33,6 +33,19 @@ app.register(orders_module)
 
 Routes by convention: `POST /orders/commands/create_order`, `GET /orders/queries/get_order`.
 
+## OpenAPI / Swagger
+
+After registering all modules, call `app.openapi(title="My API", version="0.1.0")`. Then:
+
+- **GET /openapi.json** — OpenAPI 3.0 spec
+- **GET /docs** — Swagger UI
+
+```python
+app = Application()
+# ... app.register(module) ...
+app.openapi(title="My API", version="0.1.0")
+```
+
 ## CLI
 
 ```bash

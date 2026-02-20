@@ -2,7 +2,7 @@ from urich.core.app import Application
 from urich.core.container import Container
 from urich.core.module import Module
 from urich.core.routing import HttpModule
-from urich.core.config import Config, load_config_from_env
+from urich.core.config import Config
 
 __all__ = [
     "Application",
@@ -10,5 +10,4 @@ __all__ = [
     "Module",
     "HttpModule",
     "Config",
-    "load_config_from_env",
 ]

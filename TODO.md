@@ -9,7 +9,7 @@
 - [x] Module object (bounded context): one object per context, routes and DDD set attached to it (`HttpModule`, `Module` protocol)
 - [x] Minimal DI container: register by type/protocol, resolve dependencies
 - [x] Single config object (env/file), available via DI
-- [ ] Optional: basic OpenAPI generation from annotations
+- [x] Optional: OpenAPI 3.0 spec + Swagger UI via `enable_openapi(app)` (/openapi.json, /docs)
 
 ## 2. DDD structure and CQRS
 

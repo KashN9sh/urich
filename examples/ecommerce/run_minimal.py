@@ -1,7 +1,7 @@
 """
 Minimal run: Application + orders DomainModule only.
 To run: uvicorn run_minimal:app --reload
-Or: python -c "from run_minimal import app; import uvicorn; uvicorn.run(app)"
+Then open http://localhost:8000/docs for Swagger UI.
 """
 import sys
 from pathlib import Path
@@ -14,3 +14,4 @@ from orders.module import orders_module
 
 app = Application()
 app.register(orders_module)
+app.openapi(title="Ecommerce API", version="0.1.0")

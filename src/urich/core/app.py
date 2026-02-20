@@ -42,6 +42,31 @@ class Application:
         from starlette.routing import Mount
         self._starlette.routes.append(Mount(path, app=app))
 
+    def openapi(
+        self,
+        *,
+        title: str = "API",
+        version: str = "0.1.0",
+        docs_path: str = "/docs",
+        openapi_path: str = "/openapi.json",
+    ) -> Application:
+        """Add OpenAPI spec and Swagger UI. Call after all modules are registered. Returns self."""
+        from urich.core.openapi import build_openapi_spec, SWAGGER_UI_HTML
+        from starlette.responses import HTMLResponse, JSONResponse
+
+        spec = build_openapi_spec(self._starlette.routes, title=title, version=version)
+        self._openapi_spec = spec  # type: ignore[attr-defined]
+
+        async def openapi_endpoint(request: Any) -> Any:
+            return JSONResponse(spec)
+
+        async def docs_endpoint(request: Any) -> Any:
+            return HTMLResponse(SWAGGER_UI_HTML.replace("/openapi.json", openapi_path))
+
+        self.add_route(openapi_path, openapi_endpoint, methods=["GET"])
+        self.add_route(docs_path, docs_endpoint, methods=["GET"])
+        return self
+
     @property
     def container(self) -> Container:
         """DI container: registration and resolution of dependencies."""
