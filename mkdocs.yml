@@ -5,7 +5,26 @@ repo_url: https://github.com/KashN9sh/urich
 edit_uri: edit/main/docs/
 
 theme:
-  name: readthedocs
+  name: material
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      primary: amber
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      primary: amber
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+    - content.tabs.link
 
 plugins:
   - search
@@ -27,8 +46,10 @@ nav:
   - CLI: cli.md
 
 markdown_extensions:
-  - admonition
-  - tables
-  - pymdownx.superfences
   - pymdownx.highlight:
       anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - tables
