@@ -45,6 +45,12 @@ Routes by convention: `POST /orders/commands/create_order`, `GET /orders/queries
 ## Next
 
 - [Getting started](getting-started.md) — minimal app and first DomainModule
-- [Application & modules](guide/application.md) — Application, register, OpenAPI
-- [Domain module](guide/domain-module.md) — aggregates, commands, queries, events
+- [Application & modules](guide/application.md) — Application, container, config, HttpModule
+- [Domain module](guide/domain-module.md) — bounded context, commands, queries, events
+- [Domain building blocks](guide/domain-building-blocks.md) — Entity, ValueObject, AggregateRoot, Repository, EventBus
+- [Other modules](guide/other-modules.md) — EventBus, Outbox, Discovery, RPC
+- [OpenAPI & Swagger](guide/openapi.md) — docs and request schemas
+- [Architecture](architecture.md) — design, module protocol, DI, request flow
+- [Reference](reference/overview.md) — API overview
+- [Examples](examples/ecommerce.md) — ecommerce full composition
 - [CLI](cli.md) — `urich create-app`, `add-context`, `add-aggregate`

@@ -36,7 +36,14 @@ nav:
   - Guide:
     - Application & modules: guide/application.md
     - Domain module: guide/domain-module.md
+    - Domain building blocks: guide/domain-building-blocks.md
     - Other modules: guide/other-modules.md
+    - OpenAPI & Swagger: guide/openapi.md
+  - Architecture: architecture.md
+  - Reference:
+    - API overview: reference/overview.md
+  - Examples:
+    - Ecommerce: examples/ecommerce.md
   - CLI: cli.md
 
 markdown_extensions:
