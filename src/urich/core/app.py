@@ -40,8 +40,9 @@ class Application:
         openapi_body_schema: dict[str, Any] | None = None,
         openapi_parameters: list[dict[str, Any]] | None = None,
         openapi_tags: list[str] | None = None,
+        openapi_security: list[dict[str, Any]] | None = None,
     ) -> None:
-        """Add an HTTP route. Optional openapi_* for Swagger (schemas, parameters, tags for grouping)."""
+        """Add an HTTP route. Optional openapi_* for Swagger (schemas, parameters, tags, security)."""
         if methods is None:
             methods = ["GET"]
         route = Route(path, endpoint, methods=methods)
@@ -59,6 +60,8 @@ class Application:
                 }
             if openapi_tags is not None:
                 self._route_schemas[key]["tags"] = openapi_tags
+            if openapi_security is not None:
+                self._route_schemas[key]["security"] = openapi_security
 
     def mount(self, path: str, app: Starlette) -> None:
         """Mount a sub-app at prefix. Called by modules from register_into."""
@@ -72,8 +75,12 @@ class Application:
         version: str = "0.1.0",
         docs_path: str = "/docs",
         openapi_path: str = "/openapi.json",
+        security_schemes: dict[str, Any] | None = None,
+        global_security: list[dict[str, Any]] | None = None,
     ) -> Application:
-        """Add OpenAPI spec and Swagger UI. Call after all modules are registered. Returns self."""
+        """Add OpenAPI spec and Swagger UI. Call after all modules are registered. Returns self.
+        security_schemes and global_security are passed through to the OpenAPI spec (components.securitySchemes, security).
+        """
         from urich.core.openapi import build_openapi_spec, SWAGGER_UI_HTML
         from starlette.responses import HTMLResponse, JSONResponse
 
@@ -82,6 +89,8 @@ class Application:
             title=title,
             version=version,
             route_schemas=self._route_schemas,
+            security_schemes=security_schemes,
+            global_security=global_security,
         )
         self._openapi_spec = spec  # type: ignore[attr-defined]
 

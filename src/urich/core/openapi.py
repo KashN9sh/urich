@@ -82,8 +82,12 @@ def build_openapi_spec(
     title: str = "API",
     version: str = "0.1.0",
     route_schemas: RouteSchemas | None = None,
+    security_schemes: dict[str, Any] | None = None,
+    global_security: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Build OpenAPI 3.0 spec from Starlette routes and optional per-route request schemas."""
+    """Build OpenAPI 3.0 spec from Starlette routes and optional per-route request schemas.
+    security_schemes → components.securitySchemes; global_security → spec.security and default for each operation.
+    """
     from starlette.routing import Route
 
     route_schemas = route_schemas or {}
@@ -111,8 +115,12 @@ def build_openapi_spec(
                     op["parameters"] = schema["parameters"]
                 if "tags" in schema:
                     op["tags"] = schema["tags"]
+                if "security" in schema:
+                    op["security"] = schema["security"]
             if "tags" not in op:
                 op["tags"] = ["default"]
+            if global_security is not None and "security" not in op:
+                op["security"] = global_security
             if method_lower == "post" and "/commands/" in path and "requestBody" not in op:
                 op["requestBody"] = {
                     "required": True,
@@ -121,11 +129,16 @@ def build_openapi_spec(
             elif method_lower == "get" and "/queries/" in path and "parameters" not in op:
                 op["parameters"] = [{"name": "query params", "in": "query", "schema": {"type": "object"}}]
             paths[path][method_lower] = op
-    return {
+    spec: dict[str, Any] = {
         "openapi": "3.0.0",
         "info": {"title": title, "version": version},
         "paths": paths,
     }
+    if security_schemes:
+        spec["components"] = {"securitySchemes": security_schemes}
+    if global_security is not None:
+        spec["security"] = global_security
+    return spec
 
 
 SWAGGER_UI_HTML = """<!DOCTYPE html>
