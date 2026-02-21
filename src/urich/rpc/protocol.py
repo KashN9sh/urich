@@ -2,6 +2,15 @@
 from typing import Any, Protocol, runtime_checkable
 
 
+class RpcError(Exception):
+    """RPC call failed: server returned error envelope or transport failed."""
+
+    def __init__(self, code: str, message: str) -> None:
+        self.code = code
+        self.message = message
+        super().__init__(f"[{code}] {message}")
+
+
 @runtime_checkable
 class RpcTransport(Protocol):
     """RPC transport: send request, get response. User implements (HTTP, gRPC)."""

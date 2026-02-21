@@ -13,7 +13,7 @@ from starlette.responses import Response
 from urich.core.app import Application
 from urich.core.module import Module
 from urich.discovery.protocol import ServiceDiscovery
-from urich.rpc.protocol import RpcServerHandler, RpcTransport
+from urich.rpc.protocol import RpcError, RpcServerHandler, RpcTransport
 
 
 class RpcModule(Module):
@@ -33,9 +33,9 @@ class RpcModule(Module):
         self,
         path: str = "/rpc",
         transport: Any = None,
-        handler: RpcServerHandler | None = None,
+        handler: RpcServerHandler | type | None = None,
     ) -> RpcModule:
-        """Route for incoming RPC; transport and handler optional (minimal built-in)."""
+        """Route for incoming RPC. handler: instance or class (then registered and resolved from container)."""
         self._server_path = path.rstrip("/")
         self._server_transport = transport
         self._server_handler = handler
@@ -53,6 +53,8 @@ class RpcModule(Module):
 
     def register_into(self, app: Application) -> None:
         if self._server_path is not None:
+            if self._server_handler is not None and isinstance(self._server_handler, type):
+                app.container.register_class(self._server_handler)
             app.add_route(
                 f"{self._server_path}/{{path:path}}",
                 self._make_rpc_endpoint(app),
@@ -62,9 +64,12 @@ class RpcModule(Module):
             app.container.register_instance(ServiceDiscovery, self._client_discovery)
         if self._client_transport is not None:
             app.container.register_instance(RpcTransport, self._client_transport)
+            app.container.register_class(RpcClient)
 
     def _make_rpc_endpoint(self, app: Application) -> Callable:
-        """Minimal endpoint: POST body = JSON {method, params}; response = JSON."""
+        """Minimal endpoint: POST body = JSON {method, params}; response = JSON.
+        Handler returns bytes (e.g. json.dumps(...).encode()). Standard error:
+        return json.dumps({"error": {"code": "NOT_FOUND", "message": "..."}}).encode()."""
         import json
 
         async def endpoint(request: Request) -> Response:
@@ -76,7 +81,8 @@ class RpcModule(Module):
             params = (body.get("params", {}) if isinstance(body, dict) else {})
             payload_bytes = json.dumps(params).encode()
             if self._server_handler is not None:
-                result = await self._server_handler.handle(method, payload_bytes)
+                h = app.container.resolve(self._server_handler) if isinstance(self._server_handler, type) else self._server_handler
+                result = await h.handle(method, payload_bytes)
             else:
                 result = json.dumps({"error": "no handler"}).encode()
             return Response(
@@ -84,6 +90,95 @@ class RpcModule(Module):
                 media_type="application/json",
             )
         return endpoint
+
+
+class RpcServer:
+    """
+    Server facade: implement methods like get_employee(self, employee_id: str) -> dict | None.
+    handle() dispatches by method name, parses JSON params, calls self.<method>(**params), serializes result.
+    Return None for "not found"; raise RpcError for errors (returned as standard error envelope).
+    """
+
+    async def handle(self, method: str, payload: bytes) -> bytes:
+        import json
+
+        params = {}
+        if payload:
+            try:
+                params = json.loads(payload.decode() or "{}")
+            except Exception:
+                pass
+        if not isinstance(params, dict):
+            params = {}
+
+        name = (method or "").replace("/", "_").strip()
+        handler_fn = getattr(self, name, None) if name else None
+        if not callable(handler_fn):
+            return json.dumps({"error": {"code": "NOT_FOUND", "message": f"unknown method {method!r}"}}).encode()
+
+        try:
+            result = handler_fn(**params)
+            if hasattr(result, "__await__"):
+                result = await result
+        except RpcError as e:
+            return json.dumps({"error": {"code": e.code, "message": e.message}}).encode()
+        except Exception as e:
+            return json.dumps({"error": {"code": "INTERNAL", "message": str(e)}}).encode()
+
+        return json.dumps(result).encode()
+
+
+# Standard error envelope: {"error": {"code": "...", "message": "..."}} or {"error": "string"}
+def _is_error_response(data: dict) -> bool:
+    return isinstance(data, dict) and "error" in data
+
+
+class RpcClient:
+    """
+    Facade: call(service_name, method, params) -> result dict or None.
+    Uses ServiceDiscovery + RpcTransport; JSON encode/decode inside.
+    On server error envelope or transport failure: return None or raise RpcError (see raise_on_error).
+    """
+
+    def __init__(self, discovery: ServiceDiscovery, transport: RpcTransport) -> None:
+        self._discovery = discovery
+        self._transport = transport
+
+    async def call(
+        self,
+        service_name: str,
+        method: str,
+        params: dict,
+        *,
+        raise_on_error: bool = False,
+    ) -> dict | Any | None:
+        import json
+
+        urls = self._discovery.resolve(service_name)
+        if not urls:
+            if raise_on_error:
+                raise RpcError("SERVICE_UNAVAILABLE", f"Service {service_name!r} not found")
+            return None
+        try:
+            payload = json.dumps(params).encode()
+            result = await self._transport.call(urls[0], method, payload)
+            data = json.loads(result.decode()) if result else None
+        except Exception as e:
+            if raise_on_error:
+                raise RpcError("TRANSPORT_ERROR", str(e)) from e
+            return None
+        if _is_error_response(data):
+            err = data["error"]
+            if isinstance(err, dict):
+                code = err.get("code", "UNKNOWN")
+                msg = err.get("message", str(err))
+            else:
+                code = "UNKNOWN"
+                msg = str(err)
+            if raise_on_error:
+                raise RpcError(code, msg)
+            return None
+        return data
 
 
 class JsonHttpRpcTransport:
