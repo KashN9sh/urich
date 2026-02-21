@@ -73,8 +73,8 @@ class RpcModule(Module):
                 body = await request.json()
             except Exception:
                 body = {}
-            params = body if isinstance(body, dict) else body.get("params", {})
-            payload_bytes = json.dumps(params).encode() if params else b"{}"
+            params = (body.get("params", {}) if isinstance(body, dict) else {})
+            payload_bytes = json.dumps(params).encode()
             if self._server_handler is not None:
                 result = await self._server_handler.handle(method, payload_bytes)
             else:
