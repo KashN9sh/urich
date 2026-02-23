@@ -1,6 +1,8 @@
 # Urich
 
-**Async DDD framework for microservices on Starlette.** Compose your app from module objects with `app.register(module)` — one consistent style for domain, events, RPC and discovery.
+**Urich helps teams building Python microservices who want DDD/CQRS without a heavy framework** — one consistent style for domain, events, RPC and discovery, like FastAPI with routers.
+
+Compose your app from module objects with `app.register(module)`.
 
 ---
 
@@ -38,13 +40,14 @@ app.register(orders_module)
 # Run: uvicorn main:app --reload
 ```
 
-Routes by convention: `POST /orders/commands/create_order`, `GET /orders/queries/get_order`. Add `app.openapi(title="My API", version="0.1.0")` and open **GET /docs** for Swagger UI.
+Routes by convention: `POST /orders/commands/create_order`, `GET /orders/queries/get_order`. Add `app.openapi(title="My API", version="0.1.0")` — then open **/docs** for interactive Swagger UI with no extra setup.
 
 ---
 
 ## Next
 
 - [Getting started](getting-started.md) — minimal app and first DomainModule
+- [Why Urich](guide/why-urich.md) — for whom, and how it compares to FastAPI
 - [Application & modules](guide/application.md) — Application, container, config, HttpModule
 - [Domain module](guide/domain-module.md) — bounded context, commands, queries, events
 - [Domain building blocks](guide/domain-building-blocks.md) — Entity, ValueObject, AggregateRoot, Repository, EventBus

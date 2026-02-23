@@ -1,5 +1,5 @@
 site_name: Urich
-site_description: Async DDD framework for microservices on Starlette
+site_description: Urich helps teams building Python microservices who want DDD/CQRS without a heavy framework — one style for domain, events, RPC and discovery.
 site_url: https://kashn9sh.github.io/urich
 repo_url: https://github.com/KashN9sh/urich
 edit_uri: edit/main/docs/
@@ -33,12 +33,14 @@ nav:
   - Home: index.md
   - Getting started: getting-started.md
   - Guide:
+    - Why Urich: guide/why-urich.md
     - Application & modules: guide/application.md
     - Domain module: guide/domain-module.md
     - Domain building blocks: guide/domain-building-blocks.md
     - Other modules: guide/other-modules.md
     - OpenAPI & Swagger: guide/openapi.md
   - Architecture: architecture.md
+  - Roadmap: roadmap.md
   - Reference:
     - API overview: reference/overview.md
   - Examples:

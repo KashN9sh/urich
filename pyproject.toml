@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "urich"
 version = "0.1.4"
-description = "Async DDD framework for microservices on Starlette"
+description = "Async DDD framework for Python microservices on Starlette"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

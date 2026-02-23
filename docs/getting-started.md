@@ -1,5 +1,7 @@
 # Getting started
 
+Modules and handlers are fully typed; your IDE will suggest methods and fields and catch type errors.
+
 ## Prerequisites
 
 - Python 3.12+
@@ -34,7 +36,7 @@ app.openapi(title="My API", version="0.1.0")
 uvicorn main:app --reload
 ```
 
-3. Open [http://localhost:8000/docs](http://localhost:8000/docs) for Swagger UI. You'll see routes like:
+3. Open [http://localhost:8000/docs](http://localhost:8000/docs) for interactive Swagger UI (no extra config). You'll see routes like:
 
 - `POST /orders/commands/create_order`
 - `GET /orders/queries/get_order`

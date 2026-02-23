@@ -2,6 +2,8 @@
 
 Contributions are welcome: bug reports, docs fixes, new features, or ideas.
 
+We aim to respond to issues and pull requests within 1–2 working days. If a reply is delayed, we’ll add a short comment to say so (e.g. “Thanks, will look at this next week”).
+
 ## How to contribute
 
 1. **Issues** — Open an issue for a bug or feature idea. Check existing issues first.

@@ -1,10 +1,10 @@
 # Urich
 
-Async DDD framework for microservices on Starlette.
+**Urich helps teams building Python microservices who want DDD/CQRS without a heavy framework** — one consistent style for domain, events, RPC and discovery, like FastAPI with routers.
 
-**Documentation:** [kashn9sh.github.io/urich](https://kashn9sh.github.io/urich) · **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md) · **Community & promotion:** [docs/community.md](https://kashn9sh.github.io/urich/community/)
+Async DDD framework for microservices on Starlette. The application is composed from module objects via `app.register(module)`.
 
-The application is composed from module objects via `app.register(module)` — similar to FastAPI with routers, but one consistent style for domain, events, RPC and discovery.
+**Documentation:** [kashn9sh.github.io/urich](https://kashn9sh.github.io/urich) · **Roadmap:** [docs/roadmap](https://kashn9sh.github.io/urich/roadmap/) · **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md) · **Community & promotion:** [docs/community.md](https://kashn9sh.github.io/urich/community/)
 
 ## Idea
 
@@ -33,6 +33,7 @@ app = Application()
 app.register(orders_module)
 
 # Run: python -m uvicorn main:app --reload  (or: pip install uvicorn && uvicorn main:app --reload)
+# Then open http://localhost:8000/docs for interactive Swagger UI.
 ```
 
 Routes by convention: `POST /orders/commands/create_order`, `GET /orders/queries/get_order`.
