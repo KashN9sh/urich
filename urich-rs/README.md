@@ -4,27 +4,28 @@ Urich for Rust: DDD/CQRS-style API on top of urich-core. No Axum or Tower in you
 
 ## Example
 
-Идея как в Python: **один модуль = один bounded context**, сущности (команда/запрос) задаются типами, имя маршрута выводится из типа; затем `app.register(module)`.
+Как в Python: **один модуль = один bounded context**, команда/запрос — структуры с полями, хендлер получает типизированный тип; затем `app.register(module)`.
 
 ```rust
+use serde::Deserialize;
 use serde_json::{json, Value};
 use urich_rs::{Application, Command, CoreError, DomainModule, Query};
 
-struct CreateOrder;
-impl Command for CreateOrder {
-    fn name() -> &'static str { "create_order" }
+#[derive(Deserialize, Command)]
+struct CreateOrder {
+    order_id: String,
 }
 
-struct GetOrder;
-impl Query for GetOrder {
-    fn name() -> &'static str { "get_order" }
+#[derive(Deserialize, Query)]
+struct GetOrder {
+    order_id: String,
 }
 
-fn create_order(body: Value) -> Result<Value, CoreError> {
-    Ok(json!({ "ok": true }))
+fn create_order(cmd: CreateOrder) -> Result<Value, CoreError> {
+    Ok(json!({ "ok": true, "order_id": cmd.order_id }))
 }
-fn get_order(body: Value) -> Result<Value, CoreError> {
-    Ok(json!({ "order_id": "1", "status": "created" }))
+fn get_order(query: GetOrder) -> Result<Value, CoreError> {
+    Ok(json!({ "order_id": query.order_id, "status": "created" }))
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

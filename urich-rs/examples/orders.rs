@@ -1,31 +1,26 @@
-//! Example: domain module (bounded context) — type-based API like Python DomainModule.
+//! Example: domain module — same style as Python (struct = command/query shape, handler receives typed value).
 
+use serde::Deserialize;
 use serde_json::{json, Value};
 use urich_rs::{Application, Command, CoreError, DomainModule, Query};
 
-// Command/query types: route name comes from the type (like Python CreateOrder → create_order).
-struct CreateOrder;
-impl Command for CreateOrder {
-    fn name() -> &'static str {
-        "create_order"
-    }
+// Command/query: just the struct, like Python. Name from type (CreateOrder → create_order).
+#[derive(Debug, Deserialize, Command)]
+struct CreateOrder {
+    order_id: String,
 }
 
-struct GetOrder;
-impl Query for GetOrder {
-    fn name() -> &'static str {
-        "get_order"
-    }
+#[derive(Debug, Deserialize, Query)]
+struct GetOrder {
+    order_id: String,
 }
 
-fn create_order(body: Value) -> Result<Value, CoreError> {
-    let id = body.get("order_id").and_then(|v| v.as_str()).unwrap_or("?");
-    Ok(json!({ "ok": true, "order_id": id }))
+fn create_order(cmd: CreateOrder, _container: &urich_rs::Container) -> Result<Value, CoreError> {
+    Ok(json!({ "ok": true, "order_id": cmd.order_id }))
 }
 
-fn get_order(body: Value) -> Result<Value, CoreError> {
-    let id = body.get("order_id").and_then(|v| v.as_str()).unwrap_or("?");
-    Ok(json!({ "order_id": id, "status": "created" }))
+fn get_order(query: GetOrder, _container: &urich_rs::Container) -> Result<Value, CoreError> {
+    Ok(json!({ "order_id": query.order_id, "status": "created" }))
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

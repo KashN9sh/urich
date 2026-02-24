@@ -48,7 +48,7 @@ impl HttpModule {
 impl Module for HttpModule {
     fn register_into(&mut self, app: &mut Application) -> Result<(), CoreError> {
         for (path, arc, method) in self.routes.drain(..) {
-            let handler: Handler = Box::new(move |v| arc(v));
+            let handler: Handler = Box::new(move |v, _c| Box::pin(std::future::ready(arc(v))));
             app.register_route(&method, &path, None, handler, None)?;
         }
         Ok(())

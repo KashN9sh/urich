@@ -23,12 +23,18 @@ class Application:
         self._modules: list[Module] = []
         self._container = Container()
         self._route_handlers: dict[int, tuple[Any, str]] = {}  # route_id -> (endpoint, method)
+        self._middlewares: list[Any] = []  # each: (request) -> None | Response
         self._openapi_title = "API"
         self._openapi_version = "0.1.0"
         self._handler_set = False
         if config is not None:
             self._container.register_instance(type(config), config)
             self._container.register_instance("config", config)
+
+    def add_middleware(self, middleware: Any) -> Application:
+        """Add a middleware. Middleware receives (request) and returns None to continue or Response to short-circuit (e.g. 401)."""
+        self._middlewares.append(middleware)
+        return self
 
     def register(self, module: Module) -> Application:
         """Register a module (DomainModule, EventBusModule, etc.). Returns self for chaining."""
@@ -130,16 +136,42 @@ class Application:
 
     def _make_dispatcher(self) -> Any:
         route_handlers = self._route_handlers
+        middlewares = self._middlewares
 
-        def dispatcher(route_id: int, body_bytes: bytes) -> bytes:
-            endpoint, method = route_handlers[route_id]
-            req = Request(body_bytes, method)
+        def dispatcher(route_id: int, body_bytes: bytes, context: dict) -> tuple[int, bytes]:
+            # Build request with headers from context (for middlewares)
+            headers = context.get("headers") or []
+            if isinstance(headers, list) and headers and isinstance(headers[0], (list, tuple)):
+                headers = {str(k): str(v) for k, v in headers}
+            elif isinstance(headers, dict):
+                pass
+            else:
+                headers = {}
+            req = Request(
+                body_bytes,
+                context.get("method", "GET"),
+                path=context.get("path", ""),
+                headers=headers,
+            )
 
-            async def run_endpoint() -> bytes:
+            async def run_middlewares() -> tuple[int, bytes] | None:
+                for mw in middlewares:
+                    result = mw(req)
+                    if hasattr(result, "__await__"):
+                        result = await result
+                    if result is not None:
+                        return (getattr(result, "status_code", 200), result.body)
+                return None
+
+            async def run_handler() -> tuple[int, bytes]:
+                short = await run_middlewares() if middlewares else None
+                if short is not None:
+                    return short
+                endpoint, _ = route_handlers[route_id]
                 response = await endpoint(req)
-                return response.body
+                return (getattr(response, "status_code", 200), response.body)
 
-            return asyncio.run(run_endpoint())
+            return asyncio.run(run_handler())
 
         return dispatcher
 

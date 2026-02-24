@@ -66,33 +66,40 @@ impl Default for RpcModule {
 impl Module for RpcModule {
     fn register_into(&mut self, app: &mut Application) -> Result<(), CoreError> {
         if let (Some(path), Some(handler)) = (self.server_path.take(), self.server_handler.take()) {
+            let handler = Arc::new(handler);
             if let Some(method_names) = self.server_methods.take() {
                 app.add_rpc_route(&path)?;
-                let handler = Arc::new(handler);
                 for name in method_names {
                     let name_ref = name.clone();
                     let h = Arc::clone(&handler);
-                    let handler: Handler = Box::new(move |params_value: Value| {
+                    let handler: Handler = Box::new(move |params_value: Value, container: Arc<std::sync::Mutex<crate::core::Container>>| {
                         let payload = serde_json::to_vec(&params_value).unwrap_or_default();
-                        h.handle(&name_ref, &payload)
-                            .map(|bytes| serde_json::from_slice(&bytes).unwrap_or(Value::Null))
-                            .map_err(|e| CoreError::Validation(e.to_string()))
+                        let name = name_ref.clone();
+                        let h = Arc::clone(&h);
+                        Box::pin(async move {
+                            let bytes = h.handle(&name, &payload, container).await
+                                .map_err(|e| CoreError::Validation(e.to_string()))?;
+                            serde_json::from_slice(&bytes).map_err(|e| CoreError::Validation(e.to_string()))
+                        })
                     });
                     app.add_rpc_method(&name, None, handler)?;
                 }
             } else {
-                let h: Handler = Box::new(move |body: Value| {
+                let handler = Arc::clone(&handler);
+                let h: Handler = Box::new(move |body: Value, container: Arc<std::sync::Mutex<crate::core::Container>>| {
                     let method = body
                         .get("method")
                         .and_then(|v| v.as_str())
-                        .unwrap_or("");
+                        .unwrap_or("")
+                        .to_string();
                     let params = body.get("params").cloned().unwrap_or(Value::Null);
                     let payload = serde_json::to_vec(&params).unwrap_or_default();
-                    match handler.handle(method, &payload) {
-                        Ok(bytes) => serde_json::from_slice(&bytes)
-                            .map_err(|e| CoreError::Validation(e.to_string())),
-                        Err(e) => Err(CoreError::Validation(e.to_string())),
-                    }
+                    let handler = Arc::clone(&handler);
+                    Box::pin(async move {
+                        let bytes = handler.handle(&method, &payload, container).await
+                            .map_err(|e| CoreError::Validation(e.to_string()))?;
+                        serde_json::from_slice(&bytes).map_err(|e| CoreError::Validation(e.to_string()))
+                    })
                 });
                 app.register_route("POST", &path, None, h, None)?;
             }
@@ -100,8 +107,9 @@ impl Module for RpcModule {
         if let (Some(discovery), Some(transport)) =
             (self.client_discovery.take(), self.client_transport.take())
         {
-            app.container_mut()
-                .register_instance(RpcClient::new(discovery, transport));
+            app.with_container_mut(|c| {
+                c.register_instance(RpcClient::new(discovery, transport));
+            });
         }
         Ok(())
     }
@@ -124,8 +132,8 @@ impl RpcClient {
         }
     }
 
-    /// Call remote method. Resolves service URL via discovery, then transport.
-    pub fn call(
+    /// Call remote method (async). Resolves service URL via discovery, then transport.
+    pub async fn call(
         &self,
         service_name: &str,
         method: &str,
@@ -138,11 +146,12 @@ impl RpcClient {
             method,
             params,
         )
+        .await
     }
 }
 
-/// Helper: call service by name using discovery. Pass discovery and transport (e.g. from app).
-pub fn call(
+/// Helper: call service by name using discovery (async). Pass discovery and transport (e.g. from app).
+pub async fn call(
     discovery: &dyn ServiceDiscovery,
     transport: &dyn RpcTransport,
     service_name: &str,
@@ -155,6 +164,6 @@ pub fn call(
     })?;
     let body = serde_json::json!({ "method": method, "params": params });
     let req = serde_json::to_vec(&body).unwrap_or_default();
-    let bytes = transport.call(url, method, &req)?;
+    let bytes = transport.call(url, method, &req).await?;
     serde_json::from_slice(&bytes).map_err(|e| RpcError::Transport(e.to_string()))
 }

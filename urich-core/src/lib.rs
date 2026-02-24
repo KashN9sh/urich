@@ -1,4 +1,4 @@
-//! Urich core: routing, validation, request handling, HTTP server.
+//! Urich core: routing, validation, request handling, async HTTP server.
 
 pub mod http;
 pub mod router;
@@ -8,6 +8,9 @@ pub use router::{Router, RouteId};
 pub use schema::validate_json;
 
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -30,9 +33,28 @@ pub struct Route {
     pub openapi_tag: Option<String>,
 }
 
-/// Request handler callback: (route_id, validated body bytes) -> response bytes.
-/// The host (Python/Rust facade) implements this.
-pub type RequestCallback = Box<dyn Fn(RouteId, &[u8]) -> Result<Vec<u8>, CoreError> + Send + Sync>;
+/// Request context passed to the callback (and to middlewares in the facade): method, path, headers, raw body.
+#[derive(Clone, Debug)]
+pub struct RequestContext {
+    pub method: String,
+    pub path: String,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+}
+
+/// Response: status code and body (so middlewares can return 401, etc.).
+#[derive(Clone, Debug)]
+pub struct Response {
+    pub status_code: u16,
+    pub body: Vec<u8>,
+}
+
+/// Request handler callback: (route_id, payload, context) -> future of response. Stored as Arc so it can be called without holding App lock across await.
+pub type RequestCallback = Arc<
+    dyn Fn(RouteId, &[u8], &RequestContext) -> Pin<Box<dyn Future<Output = Result<Response, CoreError>> + Send>>
+        + Send
+        + Sync,
+>;
 
 /// Core app: routes, RPC, callback.
 pub struct App {
@@ -146,44 +168,49 @@ impl App {
         id
     }
 
-    /// Publish event: call execute(handler_id, payload) for each subscriber. Stops on first error.
-    pub fn publish_event(
+    /// Publish event: call callback for each subscriber. Async, stops on first error.
+    pub async fn publish_event(
         &self,
         event_type_id: &str,
         payload: &[u8],
     ) -> Result<(), CoreError> {
         let cb = self
             .callback
-            .as_ref()
+            .clone()
             .ok_or_else(|| CoreError::Validation("no callback set".into()))?;
+        let ctx = RequestContext {
+            method: "EVENT".to_string(),
+            path: String::new(),
+            headers: vec![],
+            body: payload.to_vec(),
+        };
         if let Some(ids) = self.event_subscriptions.get(event_type_id) {
             for &handler_id in ids {
-                cb(handler_id, payload)?;
+                cb(handler_id, payload, &ctx).await?;
             }
         }
         Ok(())
     }
 
-    pub fn set_callback(&mut self, cb: RequestCallback) {
-        self.callback = Some(cb);
+    pub fn set_callback(&mut self, cb: Box<dyn Fn(RouteId, &[u8], &RequestContext) -> Pin<Box<dyn Future<Output = Result<Response, CoreError>> + Send>> + Send + Sync>) {
+        self.callback = Some(Arc::from(cb));
     }
 
-    /// Handle a request without HTTP: match route, validate body, call callback. Used by tests and later by HTTP layer.
-    /// For RPC route: parses body as { method, params }, looks up handler_id by method, calls execute(handler_id, params_bytes).
-    pub fn handle_request(
-        &self,
-        method: &str,
-        path: &str,
-        body: &[u8],
-    ) -> Result<Vec<u8>, CoreError> {
+    /// Clone of the callback (for HTTP layer to call without holding lock across await).
+    pub fn get_callback(&self) -> Option<RequestCallback> {
+        self.callback.clone()
+    }
+
+    /// Match route and validate body; returns (handler_id, payload). Used so HTTP layer can release App lock before calling async callback.
+    pub fn match_route_and_validate(&self, context: &RequestContext) -> Result<(RouteId, Vec<u8>), CoreError> {
         let route_id = self
             .router
-            .match_route(method, path)
-            .ok_or_else(|| CoreError::NotFound(format!("{} {}", method, path)))?;
+            .match_route(&context.method, &context.path)
+            .ok_or_else(|| CoreError::NotFound(format!("{} {}", context.method, context.path)))?;
 
         let (handler_id, payload) = if self.rpc_route_id == Some(route_id) {
             let body_value: serde_json::Value =
-                serde_json::from_slice(body).unwrap_or(serde_json::Value::Null);
+                serde_json::from_slice(&context.body).unwrap_or(serde_json::Value::Null);
             let method_name = body_value
                 .get("method")
                 .and_then(|v| v.as_str())
@@ -208,21 +235,26 @@ impl App {
                 .get(&route_id)
                 .ok_or_else(|| CoreError::NotFound(format!("route_id {:?}", route_id)))?;
             let validated = if let Some(ref schema) = route.request_schema {
-                validate_json(body, schema)?
+                validate_json(&context.body, schema)?
             } else {
-                body.to_vec()
+                context.body.clone()
             };
             (route_id, validated)
         };
-
-        let cb = self
-            .callback
-            .as_ref()
-            .ok_or_else(|| CoreError::Validation("no callback set".into()))?;
-        cb(handler_id, &payload)
+        Ok((handler_id, payload))
     }
 
-    /// Run HTTP server (blocks). Serves routes, GET /openapi.json, GET /docs. Requires callback to be set.
+    /// Handle a request: match route, validate, call callback. Async.
+    pub async fn handle_request(&self, context: &RequestContext) -> Result<Response, CoreError> {
+        let (handler_id, payload) = self.match_route_and_validate(context)?;
+        let cb = self
+            .callback
+            .clone()
+            .ok_or_else(|| CoreError::Validation("no callback set".into()))?;
+        cb(handler_id, &payload, context).await
+    }
+
+    /// Run HTTP server (async, use from tokio). Serves routes, GET /openapi.json, GET /docs. Requires callback to be set.
     pub fn run(
         self,
         host: &str,
@@ -230,7 +262,7 @@ impl App {
         openapi_title: &str,
         openapi_version: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let app = std::sync::Arc::new(std::sync::RwLock::new(self));
+        let app = Arc::new(std::sync::RwLock::new(self));
         http::run(app, host, port, openapi_title, openapi_version)
     }
 

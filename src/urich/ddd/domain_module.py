@@ -145,12 +145,11 @@ class DomainModule(Module):
         self, query_type: Type[Query], handler: Type[Any] | Callable[..., Any], container: Any
     ) -> Callable:
         async def endpoint(request: Request) -> Response:
-            if request.method == "POST":
-                try:
-                    body = await request.json()
-                except Exception:
-                    body = {}
-            else:
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
+            if not body and request.method != "POST":
                 body = dict(request.query_params)
             # string coercion for query params
             query = query_type(**body)

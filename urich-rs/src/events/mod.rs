@@ -46,7 +46,7 @@ pub struct EventBusModuleWithAdapter {
 impl Module for EventBusModuleWithAdapter {
     fn register_into(&mut self, app: &mut Application) -> Result<(), CoreError> {
         if let Some(a) = self.adapter.take() {
-            app.container_mut().register_instance(a);
+            app.with_container_mut(|c| c.register_instance(a));
         }
         Ok(())
     }

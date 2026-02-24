@@ -1,29 +1,43 @@
-//! Application: registers routes with core and dispatches to Rust handlers.
+//! Application: registers routes and dispatches to handlers. Handlers are async and receive (body, container) for DI.
 
 use serde_json::Value;
 use std::any::TypeId;
 use std::collections::HashMap;
-use urich_core::{App, CoreError as CoreErrorInner, RouteId};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::{Arc, Mutex};
+use urich_core::{App, CoreError as CoreErrorInner, RequestContext, Response as CoreResponse, RouteId};
 
 use super::container::Container;
 use super::outbox::{OutboxPublisher, OutboxStorage};
 use super::service_discovery::ServiceDiscovery;
 
-/// Handler: receives JSON value (validated), returns JSON value or error.
-pub type Handler = Box<dyn Fn(Value) -> Result<Value, CoreErrorInner> + Send + Sync>;
+/// Async handler: (body, container). Lock container inside handler when resolving. Like Python.
+pub type Handler = Box<
+    dyn Fn(Value, Arc<Mutex<Container>>) -> Pin<Box<dyn Future<Output = Result<Value, CoreErrorInner>> + Send>>
+        + Send
+        + Sync,
+>;
 
 /// Event handler: receives event as JSON value. Used by EventBus subscribe.
 pub(crate) type EventHandler = Box<dyn Fn(Value) -> Result<(), CoreErrorInner> + Send + Sync>;
 
-/// Application: registers routes with core and dispatches to Rust handlers; holds optional EventBus and Container.
+/// Async middleware: receives request context, returns Some(response) to short-circuit or None to continue.
+pub type Middleware = Box<
+    dyn Fn(&RequestContext) -> Pin<Box<dyn Future<Output = Option<CoreResponse>> + Send>> + Send + Sync,
+>;
+
+/// Application: registers routes with core and dispatches to Rust handlers; holds optional EventBus, middlewares, Container.
 pub struct Application {
     pub(crate) core: App,
     pub(crate) handlers: HashMap<RouteId, Handler>,
     pub(crate) callback_installed: bool,
+    /// Middlewares run before the route handler (e.g. JWT check). Like Python add_middleware().
+    pub(crate) middlewares: Vec<Middleware>,
     /// In-process event bus: type_id -> list of handlers.
     pub(crate) event_handlers: HashMap<TypeId, Vec<EventHandler>>,
-    /// DI container for modules (Discovery, RPC, etc.).
-    pub(crate) container: Container,
+    /// DI container (shared with callback so handlers can resolve deps at request time).
+    pub(crate) container: Arc<Mutex<Container>>,
     /// Optional service discovery (set by DiscoveryModule).
     pub(crate) discovery: Option<Box<dyn ServiceDiscovery>>,
     /// Optional outbox storage (set by OutboxModule).
@@ -38,12 +52,23 @@ impl Application {
             core: App::new(),
             handlers: HashMap::new(),
             callback_installed: false,
+            middlewares: Vec::new(),
             event_handlers: HashMap::new(),
-            container: Container::new(),
+            container: Arc::new(Mutex::new(Container::new())),
             discovery: None,
             outbox_storage: None,
             outbox_publisher: None,
         }
+    }
+
+    /// Add a middleware. Async: return Some(response) to short-circuit (e.g. 401) or None to continue.
+    pub fn add_middleware<F, Fut>(&mut self, mw: F) -> &mut Self
+    where
+        F: Fn(&RequestContext) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Option<CoreResponse>> + Send + 'static,
+    {
+        self.middlewares.push(Box::new(move |ctx| Box::pin(mw(ctx))));
+        self
     }
 
     /// Set outbox storage (called by OutboxModule).
@@ -66,14 +91,20 @@ impl Application {
         self.discovery.as_deref()
     }
 
-    /// DI container: register and resolve dependencies. Like Python app.container.
-    pub fn container(&self) -> &Container {
-        &self.container
+    /// Run a closure with read access to the DI container. Like Python app.container.resolve().
+    pub fn with_container<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&Container) -> R,
+    {
+        f(&*self.container.lock().unwrap())
     }
 
-    /// DI container (mutable).
-    pub fn container_mut(&mut self) -> &mut Container {
-        &mut self.container
+    /// Run a closure with mutable access to the DI container (for register_instance). Like Python app.container.
+    pub fn with_container_mut<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut Container) -> R,
+    {
+        f(&mut *self.container.lock().unwrap())
     }
 
     /// Subscribe to a domain event type. Called by DomainModule::register_into.
@@ -165,22 +196,40 @@ impl Application {
             return;
         }
         self.callback_installed = true;
-        let handlers = std::mem::take(&mut self.handlers);
-        self.core.set_callback(Box::new(move |route_id, body| {
-            let value: Value = if body.is_empty() {
-                Value::Null
-            } else {
-                serde_json::from_slice(body).map_err(|e| CoreErrorInner::Validation(e.to_string()))?
-            };
-            let handler = handlers
-                .get(&route_id)
-                .ok_or_else(|| CoreErrorInner::NotFound(format!("route_id {:?}", route_id)))?;
-            let result = handler(value)?;
-            serde_json::to_vec(&result).map_err(Into::into)
+        let handlers = Arc::new(std::mem::take(&mut self.handlers));
+        let middlewares = Arc::new(std::mem::take(&mut self.middlewares));
+        let container = Arc::clone(&self.container);
+        self.core.set_callback(Box::new(move |route_id, body, ctx: &RequestContext| {
+            let ctx = ctx.clone();
+            let body = body.to_vec();
+            let handlers = Arc::clone(&handlers);
+            let middlewares = Arc::clone(&middlewares);
+            let container = Arc::clone(&container);
+            Box::pin(async move {
+                for mw in middlewares.iter() {
+                    if let Some(resp) = mw(&ctx).await {
+                        return Ok(resp);
+                    }
+                }
+                let value: Value = if body.is_empty() {
+                    Value::Null
+                } else {
+                    serde_json::from_slice(&body).map_err(|e| CoreErrorInner::Validation(e.to_string()))?
+                };
+                let handler = handlers
+                    .get(&route_id)
+                    .ok_or_else(|| CoreErrorInner::NotFound(format!("route_id {:?}", route_id)))?;
+                let result = handler(value, container).await?;
+                let body = serde_json::to_vec(&result).map_err(CoreErrorInner::from)?;
+                Ok(CoreResponse {
+                    status_code: 200,
+                    body,
+                })
+            })
         }));
     }
 
-    /// Handle one request (for tests or when HTTP is external).
+    /// Handle one request (for tests or when HTTP is external). Returns response body. Blocks on async.
     pub fn handle_request(
         &mut self,
         method: &str,
@@ -190,7 +239,20 @@ impl Application {
         if !self.handlers.is_empty() {
             self.install_callback();
         }
-        self.core.handle_request(method, path, body)
+        let ctx = RequestContext {
+            method: method.to_string(),
+            path: path.to_string(),
+            headers: vec![],
+            body: body.to_vec(),
+        };
+        let run = async { self.core.handle_request(&ctx).await };
+        let result = match tokio::runtime::Handle::try_current() {
+            Ok(handle) => handle.block_on(run),
+            Err(_) => tokio::runtime::Runtime::new()
+                .map_err(|e| CoreErrorInner::Validation(e.to_string()))?
+                .block_on(run),
+        };
+        result.map(|r| r.body)
     }
 
     /// OpenAPI spec as JSON value.

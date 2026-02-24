@@ -66,36 +66,22 @@ use urich_rs::{Command, Query};
 use crate::domain::{AGGREGATE, AGGREGATE_CREATED};
 use crate::infrastructure::IAGGREGATERepository;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Deserialize, Command)]
 pub struct CreateAGGREGATE {
     pub AGGREGATE_LOWER_id: String,
 }
 
-impl Command for CreateAGGREGATE {
-    fn name() -> &'static str {
-        "create_AGGREGATE_LOWER"
-    }
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Deserialize, Query)]
 pub struct GetAGGREGATE {
     pub AGGREGATE_LOWER_id: String,
 }
 
-impl Query for GetAGGREGATE {
-    fn name() -> &'static str {
-        "get_AGGREGATE_LOWER"
-    }
+pub fn create_AGGREGATE_LOWER(cmd: CreateAGGREGATE) -> Result<Value, CoreError> {
+    Ok(json!({ "ok": true, "id": cmd.AGGREGATE_LOWER_id }))
 }
 
-pub fn create_AGGREGATE_LOWER(body: Value) -> Result<Value, CoreError> {
-    let id = body.get("AGGREGATE_LOWER_id").and_then(|v| v.as_str()).unwrap_or("?");
-    Ok(json!({ "ok": true, "id": id }))
-}
-
-pub fn get_AGGREGATE_LOWER(body: Value) -> Result<Value, CoreError> {
-    let id = body.get("AGGREGATE_LOWER_id").and_then(|v| v.as_str()).unwrap_or("?");
-    Ok(json!({ "id": id }))
+pub fn get_AGGREGATE_LOWER(query: GetAGGREGATE) -> Result<Value, CoreError> {
+    Ok(json!({ "id": query.AGGREGATE_LOWER_id }))
 }
 "#;
 

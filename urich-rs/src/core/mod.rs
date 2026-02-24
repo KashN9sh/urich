@@ -7,7 +7,7 @@ pub mod outbox;
 pub mod routing;
 pub mod service_discovery;
 
-pub use app::{Application, Handler};
+pub use app::{Application, Handler, Middleware};
 pub use container::{Container, ContainerError};
 pub use module::Module;
 pub use routing::HttpModule;

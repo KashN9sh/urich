@@ -2,7 +2,7 @@
 
 use pyo3::prelude::*;
 use std::sync::Mutex;
-use urich_core::{App, CoreError, RouteId};
+use urich_core::{App, CoreError, RequestContext, Response as CoreResponse, RouteId};
 
 #[pyclass]
 struct CoreApp {
@@ -147,7 +147,8 @@ impl CoreApp {
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
-    /// Set the Python callable invoked as (route_id: int, body_bytes: bytes) -> response_bytes: bytes.
+    /// Set the Python callable invoked as (route_id: int, body_bytes: bytes, context: dict) -> (status_code: int, response_bytes: bytes).
+    /// context has "method", "path", "headers" (list of [name, value]), "body" (bytes).
     fn set_handler(&self, handler: pyo3::Py<pyo3::PyAny>) -> PyResult<()> {
         let handlers = Python::with_gil(|py| handler.clone_ref(py));
         *self.handlers.lock().unwrap() = Some(handler);
@@ -158,21 +159,37 @@ impl CoreApp {
         let app = guard
             .as_mut()
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
-        app.set_callback(Box::new(move |route_id: RouteId, body: &[u8]| {
+        app.set_callback(Box::new(move |route_id: RouteId, body: &[u8], ctx: &RequestContext| {
             Python::with_gil(|py| {
                 let cb = handlers.bind(py);
                 let body_bytes = pyo3::types::PyBytes::new_bound(py, body);
-                let result = cb.call1((route_id.0, body_bytes))?;
-                let bytes = result.downcast::<pyo3::types::PyBytes>()?;
-                Ok(bytes.as_bytes().to_vec())
+                let headers_list = pyo3::types::PyList::empty_bound(py);
+                for (k, v) in &ctx.headers {
+                    let pair = pyo3::types::PyList::new_bound(py, [k.as_str(), v.as_str()]);
+                    headers_list.append(pair)?;
+                }
+                let context = pyo3::types::PyDict::new_bound(py);
+                context.set_item("method", ctx.method.as_str())?;
+                context.set_item("path", ctx.path.as_str())?;
+                context.set_item("headers", headers_list)?;
+                context.set_item("body", pyo3::types::PyBytes::new_bound(py, &ctx.body))?;
+                let result = cb.call1((route_id.0, body_bytes, context))?;
+                let tuple = result.downcast::<pyo3::types::PyTuple>()?;
+                let status: u16 = tuple.get_item(0)?.extract()?;
+                let body_item = tuple.get_item(1)?;
+                let bytes = body_item.downcast::<pyo3::types::PyBytes>()?;
+                Ok(CoreResponse {
+                    status_code: status,
+                    body: bytes.as_bytes().to_vec(),
+                })
             })
             .map_err(|e: pyo3::PyErr| CoreError::Validation(e.to_string()))
         }));
         Ok(())
     }
 
-    /// Handle request without HTTP (for testing). Returns response bytes.
-    fn handle_request(&self, method: &str, path: &str, body: &[u8]) -> PyResult<Vec<u8>> {
+    /// Handle request without HTTP (for testing). Returns (status_code, response_bytes).
+    fn handle_request(&self, method: &str, path: &str, body: &[u8]) -> PyResult<(u16, Vec<u8>)> {
         let guard = self
             .inner
             .lock()
@@ -180,8 +197,16 @@ impl CoreApp {
         let app = guard
             .as_ref()
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
-        app.handle_request(method, path, body)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+        let ctx = RequestContext {
+            method: method.to_string(),
+            path: path.to_string(),
+            headers: vec![],
+            body: body.to_vec(),
+        };
+        let resp = app
+            .handle_request(&ctx)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok((resp.status_code, resp.body))
     }
 
     /// OpenAPI spec as JSON string.

@@ -1,10 +1,12 @@
-//! Domain module (bounded context). Like Python DomainModule.
+//! Domain module (bounded context). Like Python DomainModule. Handlers run in async context.
 
 use serde_json::Value;
 use std::any::TypeId;
+use std::sync::{Arc, Mutex};
 use urich_core::CoreError as CoreErrorInner;
 
 use crate::core::app::{Application, EventHandler, Handler};
+use crate::core::container::Container;
 use crate::core::Module;
 use crate::domain::{AggregateRoot, DomainEvent};
 
@@ -49,42 +51,80 @@ impl DomainModule {
         self
     }
 
-    /// Add command: POST {context}/commands/{name}.
-    pub fn command(
+    /// Add command: POST {context}/commands/{name}. Handler is async (receives body, container Arc).
+    pub fn command<F, Fut>(
         mut self,
         name: &str,
-        handler: impl Fn(Value) -> Result<Value, CoreErrorInner> + Send + Sync + 'static,
-    ) -> Self {
+        handler: F,
+    ) -> Self
+    where
+        F: Fn(Value, Arc<Mutex<Container>>) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Result<Value, CoreErrorInner>> + Send + 'static,
+    {
         let path = format!("{}/commands/{}", self.context, name);
-        self.commands.push((path, Box::new(handler)));
+        self.commands.push((path, Box::new(move |body, container| Box::pin(handler(body, container)))));
         self
     }
 
-    /// Add query: GET {context}/queries/{name}.
-    pub fn query(
+    /// Add query: GET {context}/queries/{name}. Handler is async.
+    pub fn query<F, Fut>(
         mut self,
         name: &str,
-        handler: impl Fn(Value) -> Result<Value, CoreErrorInner> + Send + Sync + 'static,
-    ) -> Self {
+        handler: F,
+    ) -> Self
+    where
+        F: Fn(Value, Arc<Mutex<Container>>) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Result<Value, CoreErrorInner>> + Send + 'static,
+    {
         let path = format!("{}/queries/{}", self.context, name);
-        self.queries.push((path, Box::new(handler)));
+        self.queries.push((path, Box::new(move |body, container| Box::pin(handler(body, container)))));
         self
     }
 
-    /// Add command by type: path from `C::name()`. Like Python: .command(CreateOrder, handler).
+    /// Add command by type: body deserialized into `C`, handler receives (command, &Container). Sync handler wrapped in async.
     pub fn command_type<C: crate::ddd::Command>(
-        self,
-        handler: impl Fn(Value) -> Result<Value, CoreErrorInner> + Send + Sync + 'static,
+        mut self,
+        handler: impl Fn(C, &Container) -> Result<Value, CoreErrorInner> + Send + Sync + 'static,
     ) -> Self {
-        self.command(C::name(), handler)
+        let path = format!("{}/commands/{}", self.context, C::name());
+        let handler_arc: Arc<dyn Fn(Value, &Container) -> Result<Value, CoreErrorInner> + Send + Sync> =
+            Arc::new(Box::new(move |body: Value, guard: &Container| {
+                let c: C = serde_json::from_value(body)
+                    .map_err(|e| CoreErrorInner::Validation(e.to_string()))?;
+                handler(c, guard)
+            }) as Box<dyn Fn(Value, &Container) -> Result<Value, CoreErrorInner> + Send + Sync>);
+        let h: Handler = Box::new(move |body: Value, container: Arc<Mutex<Container>>| {
+            let handler = Arc::clone(&handler_arc);
+            Box::pin(async move {
+                let guard = container.lock().unwrap();
+                handler(body, &*guard)
+            })
+        });
+        self.commands.push((path, h));
+        self
     }
 
-    /// Add query by type: path from `Q::name()`. Like Python: .query(GetOrder, handler).
+    /// Add query by type: params deserialized into `Q`, handler receives (query, &Container). Sync handler wrapped in async.
     pub fn query_type<Q: crate::ddd::Query>(
-        self,
-        handler: impl Fn(Value) -> Result<Value, CoreErrorInner> + Send + Sync + 'static,
+        mut self,
+        handler: impl Fn(Q, &Container) -> Result<Value, CoreErrorInner> + Send + Sync + 'static,
     ) -> Self {
-        self.query(Q::name(), handler)
+        let path = format!("{}/queries/{}", self.context, Q::name());
+        let handler_arc: Arc<dyn Fn(Value, &Container) -> Result<Value, CoreErrorInner> + Send + Sync> =
+            Arc::new(Box::new(move |body: Value, guard: &Container| {
+                let q: Q = serde_json::from_value(body)
+                    .map_err(|e| CoreErrorInner::Validation(e.to_string()))?;
+                handler(q, guard)
+            }) as Box<dyn Fn(Value, &Container) -> Result<Value, CoreErrorInner> + Send + Sync>);
+        let h: Handler = Box::new(move |body: Value, container: Arc<Mutex<Container>>| {
+            let handler = Arc::clone(&handler_arc);
+            Box::pin(async move {
+                let guard = container.lock().unwrap();
+                handler(body, &*guard)
+            })
+        });
+        self.queries.push((path, h));
+        self
     }
 }
 
