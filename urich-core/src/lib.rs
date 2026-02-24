@@ -20,13 +20,14 @@ pub enum CoreError {
     Json(#[from] serde_json::Error),
 }
 
-/// Registered route: method, path pattern, optional request body schema (JSON Schema).
+/// Registered route: method, path pattern, optional request body schema (JSON Schema), optional OpenAPI tag.
 #[derive(Clone, Debug)]
 pub struct Route {
     pub id: RouteId,
     pub method: String,
     pub path: String,
     pub request_schema: Option<serde_json::Value>,
+    pub openapi_tag: Option<String>,
 }
 
 /// Request handler callback: (route_id, validated body bytes) -> response bytes.
@@ -51,12 +52,13 @@ impl App {
         }
     }
 
-    /// Register a route. Path is exact (e.g. "/orders/commands/create_order").
+    /// Register a route. Path is exact (e.g. "orders/commands/create_order"). Optional openapi_tag for OpenAPI tags (e.g. context name).
     pub fn register_route(
         &mut self,
         method: &str,
         path: &str,
         request_schema: Option<serde_json::Value>,
+        openapi_tag: Option<&str>,
     ) -> Result<RouteId, CoreError> {
         let id = RouteId(self.next_route_id);
         self.next_route_id += 1;
@@ -68,6 +70,7 @@ impl App {
                 method: method.to_owned(),
                 path: path.to_owned(),
                 request_schema,
+                openapi_tag: openapi_tag.map(String::from),
             },
         );
         Ok(id)
@@ -125,7 +128,12 @@ impl App {
                 let key = format!("/{}", r.path.trim_start_matches('/'));
                 let method = r.method.to_lowercase();
                 let mut op = serde_json::Map::new();
-                op.insert("tags".into(), serde_json::json!([]));
+                let tags = r
+                    .openapi_tag
+                    .as_ref()
+                    .map(|t| serde_json::json!([t.as_str()]))
+                    .unwrap_or(serde_json::json!([]));
+                op.insert("tags".into(), tags);
                 if let Some(ref s) = r.request_schema {
                     op.insert("requestBody".into(), serde_json::json!({
                         "content": { "application/json": { "schema": s } }

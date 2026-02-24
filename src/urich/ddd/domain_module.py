@@ -7,10 +7,9 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Type
 
-from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
-
 from urich.core.app import Application
+from urich.core.request import Request
+from urich.core.responses import JSONResponse, Response
 from urich.core.module import Module
 from urich.core.openapi import parameters_from_dataclass, schema_from_dataclass
 from urich.domain import AggregateRoot, DomainEvent, Repository

@@ -1,6 +1,6 @@
 # Multi-language design: core + facades
 
-Long-term vision: one **Urich core** (shared implementation) and thin **facades** per language (Python, Rust). You change the core once; the facades only plug the core into the host — they don't reimplement logic.
+**Architecture:** one **Urich core** (shared implementation) and two **facades** — Python and Rust. There is no separate "main" or "default" package: the Python facade *is* the package `urich` for Python; the Rust facade is `urich-rs`. Both depend only on the core. You change the core once; the facades only plug the core into the host — they don't reimplement logic.
 
 ---
 
@@ -35,8 +35,8 @@ Long-term vision: one **Urich core** (shared implementation) and thin **facades*
 └─────────────────────┘               └─────────────────────┘
 ```
 
-- **Core** = HTTP + routing + parse + validate + serialize. It runs the server and invokes the host (Python or Rust) only to execute the handler for the matched route. One implementation for both languages.
-- **Facades** = language bindings only: "register this handler for this route", "start the core". Your app depends only on `urich` (Python) or `urich` (Rust), which in turn ship/embed the core. No extra web or transport dependency.
+- **Core** (`urich-core`) = HTTP + routing + parse + validate + serialize. It runs the server and invokes the host (Python or Rust) only to execute the handler for the matched route. One implementation for both languages.
+- **Facades** = language bindings only: "register this handler for this route", "start the core". Your app depends only on `urich` (Python) or `urich-rs` (Rust). The Python package `urich` depends directly on the core (e.g. `urich-core-native` from the same repo); one wheel can be built with maturin (core + Python facade). No Starlette, no ASGI, no extra web framework.
 
 When you change the core, both languages get it. Facades change only if the registration/start API of the core changes.
 
@@ -76,11 +76,11 @@ So: **one place for everything (the core); facades are only "register handlers +
 
 **Core API (Rust):**
 
-- `register_route(method, path, request_schema: Option<Value>) -> Result<RouteId>` — path is exact (e.g. `orders/commands/create_order`). Schema is JSON Schema (optional).
+- `register_route(method, path, request_schema: Option<Value>, openapi_tag: Option<&str>) -> Result<RouteId>` — path is exact (e.g. `orders/commands/create_order`). Schema is JSON Schema (optional). openapi_tag used for OpenAPI tags (e.g. context name).
 - `set_callback(cb: RequestCallback)` — `RequestCallback = Box<dyn Fn(RouteId, &[u8]) -> Result<Vec<u8>, CoreError> + Send + Sync>`. The core calls this with (route_id, validated body bytes); the host returns response bytes.
 - `handle_request(method, path, body) -> Result<Vec<u8>>` — no HTTP; used by tests and by the HTTP layer when it receives a request.
 - `openapi_spec(title, version) -> Value` — minimal OpenAPI 3.0 JSON from registered routes.
 
 **Schema:** Core accepts optional JSON Schema for the request body. Validation is done in the core (currently parse-only; full jsonschema check can be added). Facades pass schema when registering (Python: from Pydantic/dataclass; Rust: from serde/schemars).
 
-**Implemented:** See repo — `urich-core/` (Rust), `urich-rs/` (Rust facade + example), `urich-python/` (PyO3; build with maturin).
+**Implemented:** See repo — `urich-core/` (Rust), `urich-rs/` (Rust facade + example), `urich-python/` (PyO3 bindings; build with maturin). The Python facade lives in `src/urich/`: Application, DomainModule, etc., use the core via `urich_core_native`; `app.run(host, port)` calls `core.run()`. Single package `urich` = core (native) + Python facade; dependency on the core is direct, not optional.

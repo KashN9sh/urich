@@ -1,32 +1,37 @@
-"""Application — Starlette wrapper; app is composed from modules via app.register(module)."""
+"""Application — composed from modules via app.register(module). Backed by urich-core (no Starlette)."""
 from __future__ import annotations
 
+import asyncio
+import json
 from typing import Any
 
-from starlette.applications import Starlette
-from starlette.routing import Route
+import urich_core_native
 
 from urich.core.container import Container
 from urich.core.module import Module
+from urich.core.request import Request
 
 
 class Application:
     """
     Application. Composed from modules via register(module).
-    Each module is an object with register_into(app).
+    Uses urich-core for HTTP and routing. No Starlette.
     """
 
     def __init__(self, config: Any = None) -> None:
-        self._starlette = Starlette(routes=[])
+        self._core = urich_core_native.CoreApp()
         self._modules: list[Module] = []
         self._container = Container()
-        self._route_schemas: dict[tuple[str, str], dict[str, Any]] = {}  # (path, method) -> OpenAPI op extras
+        self._route_handlers: dict[int, tuple[Any, str]] = {}  # route_id -> (endpoint, method)
+        self._openapi_title = "API"
+        self._openapi_version = "0.1.0"
+        self._handler_set = False
         if config is not None:
             self._container.register_instance(type(config), config)
             self._container.register_instance("config", config)
 
     def register(self, module: Module) -> Application:
-        """Register a module (DomainModule, EventBusModule, routes, etc.). Returns self for chaining."""
+        """Register a module (DomainModule, EventBusModule, etc.). Returns self for chaining."""
         module.register_into(self)
         self._modules.append(module)
         return self
@@ -42,31 +47,19 @@ class Application:
         openapi_tags: list[str] | None = None,
         openapi_security: list[dict[str, Any]] | None = None,
     ) -> None:
-        """Add an HTTP route. Optional openapi_* for Swagger (schemas, parameters, tags, security)."""
+        """Add an HTTP route. Registers with core; openapi_* used for OpenAPI (tags, schema)."""
         if methods is None:
             methods = ["GET"]
-        route = Route(path, endpoint, methods=methods)
-        self._starlette.routes.append(route)
+        path_clean = path.lstrip("/")
+        schema_str = json.dumps(openapi_body_schema) if openapi_body_schema else None
+        tag = openapi_tags[0] if openapi_tags else None
         for method in methods:
-            key = (path, method.lower())
-            if key not in self._route_schemas:
-                self._route_schemas[key] = {}
-            if method.lower() == "get" and openapi_parameters is not None:
-                self._route_schemas[key]["parameters"] = openapi_parameters
-            if method.lower() == "post" and openapi_body_schema is not None:
-                self._route_schemas[key]["requestBody"] = {
-                    "required": True,
-                    "content": {"application/json": {"schema": openapi_body_schema}},
-                }
-            if openapi_tags is not None:
-                self._route_schemas[key]["tags"] = openapi_tags
-            if openapi_security is not None:
-                self._route_schemas[key]["security"] = openapi_security
+            route_id = self._core.register_route(method, path_clean, schema_str, tag)
+            self._route_handlers[route_id] = (endpoint, method)
 
-    def mount(self, path: str, app: Starlette) -> None:
-        """Mount a sub-app at prefix. Called by modules from register_into."""
-        from starlette.routing import Mount
-        self._starlette.routes.append(Mount(path, app=app))
+    def mount(self, path: str, app: Any) -> None:
+        """Not supported when using core backend."""
+        raise NotImplementedError("mount() not supported; use core backend only")
 
     def openapi(
         self,
@@ -78,42 +71,34 @@ class Application:
         security_schemes: dict[str, Any] | None = None,
         global_security: list[dict[str, Any]] | None = None,
     ) -> Application:
-        """Add OpenAPI spec and Swagger UI. Call after all modules are registered. Returns self.
-        security_schemes and global_security are passed through to the OpenAPI spec (components.securitySchemes, security).
-        """
-        from urich.core.openapi import build_openapi_spec, SWAGGER_UI_HTML
-        from starlette.responses import HTMLResponse, JSONResponse
-
-        spec = build_openapi_spec(
-            self._starlette.routes,
-            title=title,
-            version=version,
-            route_schemas=self._route_schemas,
-            security_schemes=security_schemes,
-            global_security=global_security,
-        )
-        self._openapi_spec = spec  # type: ignore[attr-defined]
-
-        async def openapi_endpoint(request: Any) -> Any:
-            return JSONResponse(spec)
-
-        async def docs_endpoint(request: Any) -> Any:
-            return HTMLResponse(SWAGGER_UI_HTML.replace("/openapi.json", openapi_path))
-
-        self.add_route(openapi_path, openapi_endpoint, methods=["GET"])
-        self.add_route(docs_path, docs_endpoint, methods=["GET"])
+        """Store OpenAPI title/version for run(). /openapi.json and /docs are served by core."""
+        self._openapi_title = title
+        self._openapi_version = version
         return self
+
+    def _make_dispatcher(self) -> Any:
+        route_handlers = self._route_handlers
+
+        def dispatcher(route_id: int, body_bytes: bytes) -> bytes:
+            endpoint, method = route_handlers[route_id]
+            req = Request(body_bytes, method)
+
+            async def run_endpoint() -> bytes:
+                response = await endpoint(req)
+                return response.body
+
+            return asyncio.run(run_endpoint())
+
+        return dispatcher
 
     @property
     def container(self) -> Container:
         """DI container: registration and resolution of dependencies."""
         return self._container
 
-    @property
-    def starlette(self) -> Starlette:
-        """Underlying Starlette ASGI app (e.g. for middleware)."""
-        return self._starlette
-
-    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
-        """ASGI: uvicorn.run(app) works directly."""
-        await self._starlette(scope, receive, send)
+    def run(self, host: str = "127.0.0.1", port: int = 8000) -> None:
+        """Run HTTP server (blocks). Serves routes, GET /openapi.json, GET /docs. Call set_handler via dispatcher."""
+        if not self._handler_set:
+            self._core.set_handler(self._make_dispatcher())
+            self._handler_set = True
+        self._core.run(host, port, self._openapi_title, self._openapi_version)

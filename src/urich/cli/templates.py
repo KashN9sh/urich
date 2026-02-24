@@ -122,7 +122,7 @@ from urich import Application
 app = Application()
 # app.register({first_context}_module)
 
-# Run: uvicorn main:app --reload
+# Run: app.run()  # or app.run(host="0.0.0.0", port=8000)
 '''
 
 CONTEXT_SKELETON = '''"""Domain {context}."""

@@ -1,4 +1,4 @@
-//! Python bindings for urich-core. Exposes register_route, set_handler, handle_request, openapi_spec.
+//! Python bindings for urich-core. Exposes register_route, set_handler, handle_request, openapi_spec, run.
 
 use pyo3::prelude::*;
 use std::sync::Mutex;
@@ -6,7 +6,7 @@ use urich_core::{App, CoreError, RouteId};
 
 #[pyclass]
 struct CoreApp {
-    inner: Mutex<App>,
+    inner: Mutex<Option<App>>,
     handlers: Mutex<Option<pyo3::Py<pyo3::PyAny>>>,
 }
 
@@ -15,26 +15,30 @@ impl CoreApp {
     #[new]
     fn new() -> Self {
         Self {
-            inner: Mutex::new(App::new()),
+            inner: Mutex::new(Some(App::new())),
             handlers: Mutex::new(None),
         }
     }
 
-    /// Register a route. Returns route_id (int).
-    #[pyo3(signature = (method, path, request_schema=None))]
+    /// Register a route. Returns route_id (int). openapi_tag optional (e.g. context name for OpenAPI tags).
+    #[pyo3(signature = (method, path, request_schema=None, openapi_tag=None))]
     fn register_route(
         &self,
         method: &str,
         path: &str,
         request_schema: Option<&str>,
+        openapi_tag: Option<&str>,
     ) -> PyResult<u32> {
         let schema = request_schema.and_then(|s| serde_json::from_str(s).ok());
-        let mut app = self
+        let mut guard = self
             .inner
             .lock()
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let app = guard
+            .as_mut()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
         let id = app
-            .register_route(method, path, schema)
+            .register_route(method, path, schema, openapi_tag)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         Ok(id.0)
     }
@@ -43,10 +47,13 @@ impl CoreApp {
     fn set_handler(&self, handler: pyo3::Py<pyo3::PyAny>) -> PyResult<()> {
         let handlers = Python::with_gil(|py| handler.clone_ref(py));
         *self.handlers.lock().unwrap() = Some(handler);
-        let mut app = self
+        let mut guard = self
             .inner
             .lock()
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let app = guard
+            .as_mut()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
         app.set_callback(Box::new(move |route_id: RouteId, body: &[u8]| {
             Python::with_gil(|py| {
                 let cb = handlers.bind(py);
@@ -62,23 +69,49 @@ impl CoreApp {
 
     /// Handle request without HTTP (for testing). Returns response bytes.
     fn handle_request(&self, method: &str, path: &str, body: &[u8]) -> PyResult<Vec<u8>> {
-        let app = self
+        let guard = self
             .inner
             .lock()
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let app = guard
+            .as_ref()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
         app.handle_request(method, path, body)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
     /// OpenAPI spec as JSON string.
     fn openapi_spec(&self, title: &str, version: &str) -> PyResult<String> {
-        let app = self
+        let guard = self
             .inner
             .lock()
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let app = guard
+            .as_ref()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
         let spec = app.openapi_spec(title, version);
         serde_json::to_string(&spec)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    /// Run HTTP server (blocks). Serves routes, GET /openapi.json, GET /docs. Call set_handler before run. After run, this CoreApp is consumed.
+    fn run(
+        &self,
+        host: &str,
+        port: u16,
+        openapi_title: &str,
+        openapi_version: &str,
+    ) -> PyResult<()> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let app = guard
+            .take()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
+        drop(guard);
+        app.run(host, port, openapi_title, openapi_version)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 }
 

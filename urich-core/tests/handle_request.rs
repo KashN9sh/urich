@@ -6,7 +6,7 @@ use urich_core::{App, CoreError, RouteId};
 fn register_and_handle() {
     let mut app = App::new();
     let id = app
-        .register_route("POST", "orders/commands/create_order", None)
+        .register_route("POST", "orders/commands/create_order", None, None)
         .unwrap();
     app.set_callback(Box::new(move |rid: RouteId, body: &[u8]| {
         assert_eq!(rid.0, id.0);

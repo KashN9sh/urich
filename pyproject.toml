@@ -1,18 +1,17 @@
 [build-system]
-requires = ["setuptools>=61", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1.4"]
+build-backend = "maturin"
 
 [project]
 name = "urich"
 version = "0.1.4"
-description = "Async DDD framework for Python microservices on Starlette"
+description = "Async DDD framework for Python microservices (urich-core backend)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "starlette>=0.41.0",
     "pydantic>=2.0",
 ]
-keywords = ["asgi", "ddd", "microservices", "starlette", "cqrs"]
+keywords = ["ddd", "microservices", "cqrs", "http"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -36,8 +35,9 @@ Repository = "https://github.com/KashN9sh/urich"
 [project.scripts]
 urich = "urich.cli.main:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.maturin]
+manifest-path = "urich-python/Cargo.toml"
+python-source = "src"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

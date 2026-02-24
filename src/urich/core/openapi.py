@@ -85,20 +85,25 @@ def build_openapi_spec(
     security_schemes: dict[str, Any] | None = None,
     global_security: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Build OpenAPI 3.0 spec from Starlette routes and optional per-route request schemas.
+    """Build OpenAPI 3.0 spec from route list. Each route: dict with 'path' and 'methods' (or legacy object with .path, .methods).
     security_schemes → components.securitySchemes; global_security → spec.security and default for each operation.
     """
-    from starlette.routing import Route
-
     route_schemas = route_schemas or {}
     paths: dict[str, Any] = {}
     for route in routes:
-        if not isinstance(route, Route):
+        if isinstance(route, dict):
+            path = _path_to_openapi(route.get("path", ""))
+            methods = route.get("methods", ["GET"])
+        elif hasattr(route, "path") and hasattr(route, "methods"):
+            path = _path_to_openapi(getattr(route, "path", ""))
+            methods = getattr(route, "methods", None) or ["GET"]
+        else:
             continue
-        path = _path_to_openapi(route.path)
+        if not path:
+            continue
         if path not in paths:
             paths[path] = {}
-        for method in route.methods or ["GET"]:
+        for method in methods:
             method_lower = method.lower()
             op: dict[str, Any] = {
                 "summary": f"{method} {path}",

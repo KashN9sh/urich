@@ -7,10 +7,9 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from starlette.requests import Request
-from starlette.responses import Response
-
 from urich.core.app import Application
+from urich.core.request import Request
+from urich.core.responses import Response
 from urich.core.module import Module
 from urich.discovery.protocol import ServiceDiscovery
 from urich.rpc.protocol import RpcError, RpcServerHandler, RpcTransport
@@ -55,8 +54,9 @@ class RpcModule(Module):
         if self._server_path is not None:
             if self._server_handler is not None and isinstance(self._server_handler, type):
                 app.container.register_class(self._server_handler)
+            # Core backend: single route; method name comes from body["method"].
             app.add_route(
-                f"{self._server_path}/{{path:path}}",
+                self._server_path,
                 self._make_rpc_endpoint(app),
                 methods=["POST"],
             )
@@ -73,11 +73,13 @@ class RpcModule(Module):
         import json
 
         async def endpoint(request: Request) -> Response:
-            method = request.path_params.get("path", "") if request.path_params else ""
             try:
                 body = await request.json()
             except Exception:
                 body = {}
+            method = (body.get("method", "") if isinstance(body, dict) else "") or (
+                request.path_params.get("path", "") if request.path_params else ""
+            )
             params = (body.get("params", {}) if isinstance(body, dict) else {})
             payload_bytes = json.dumps(params).encode()
             if self._server_handler is not None:
