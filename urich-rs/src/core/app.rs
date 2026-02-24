@@ -110,6 +110,51 @@ impl Application {
         Ok(id)
     }
 
+    /// Add command: POST {context}/commands/{name}. Core builds path.
+    pub fn add_command(
+        &mut self,
+        context: &str,
+        name: &str,
+        request_schema: Option<Value>,
+        handler: Handler,
+        _openapi_tag: Option<&str>,
+    ) -> Result<RouteId, CoreErrorInner> {
+        let id = self.core.add_command(context, name, request_schema)?;
+        self.handlers.insert(id, handler);
+        Ok(id)
+    }
+
+    /// Add query: GET {context}/queries/{name}. Core builds path.
+    pub fn add_query(
+        &mut self,
+        context: &str,
+        name: &str,
+        request_schema: Option<Value>,
+        handler: Handler,
+        _openapi_tag: Option<&str>,
+    ) -> Result<RouteId, CoreErrorInner> {
+        let id = self.core.add_query(context, name, request_schema)?;
+        self.handlers.insert(id, handler);
+        Ok(id)
+    }
+
+    /// Add RPC route (one POST). Then use add_rpc_method for each method.
+    pub fn add_rpc_route(&mut self, path: &str) -> Result<(), CoreErrorInner> {
+        self.core.add_rpc_route(path)
+    }
+
+    /// Add RPC method. Callback receives params as JSON value.
+    pub fn add_rpc_method(
+        &mut self,
+        name: &str,
+        request_schema: Option<Value>,
+        handler: Handler,
+    ) -> Result<RouteId, CoreErrorInner> {
+        let id = self.core.add_rpc_method(name, request_schema)?;
+        self.handlers.insert(id, handler);
+        Ok(id)
+    }
+
     /// Register a domain module (bounded context). Like Python: app.register(employees_module).
     pub fn register(&mut self, module: &mut dyn crate::core::Module) -> Result<(), CoreErrorInner> {
         module.register_into(self)

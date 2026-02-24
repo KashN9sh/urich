@@ -65,42 +65,64 @@ class DomainModule(Module):
             container.register_class(impl)
             container.register(iface, lambda c=container, i=impl: c.resolve(i))
 
-        # EventBus: if already registered (e.g. EventBusModule), use it; else default in-process
+        # Context for core paths (no leading slash)
+        context = self.prefix.strip("/") or self.name
+
+        # EventBus: if already registered (e.g. EventBusModule), use it; else default in-process wired to core
         try:
             event_bus = container.resolve(EventBus)
         except KeyError:
             from urich.domain.events import InProcessEventDispatcher
-            event_bus = InProcessEventDispatcher()
+            event_bus = InProcessEventDispatcher(core_publish=app.publish_event)
             container.register_instance(EventBus, event_bus)
             container.register_instance(InProcessEventDispatcher, event_bus)
         for event_type, handler in self._event_handlers:
-            event_bus.subscribe(event_type, handler)
+            app.subscribe_event(
+                event_type.__name__,
+                self._make_event_endpoint(event_type, handler, container),
+            )
 
-        # Command/query handlers: register class in container
+        # Command/query: core builds path; register handler_id -> endpoint
         for cmd_type, handler in self._commands:
             if isinstance(handler, type):
                 container.register_class(handler)
-            path = f"{self.prefix.rstrip('/')}/commands/{_snake(cmd_type.__name__)}"
-            app.add_route(
-                path,
+            app.add_command(
+                context,
+                _snake(cmd_type.__name__),
                 self._make_command_endpoint(cmd_type, handler, container),
-                methods=["POST"],
-                openapi_body_schema=schema_from_dataclass(cmd_type),
-                openapi_tags=[self.name],
+                request_schema=schema_from_dataclass(cmd_type),
             )
 
         for query_type, handler in self._queries:
             if isinstance(handler, type):
                 container.register_class(handler)
-            path = f"{self.prefix.rstrip('/')}/queries/{_snake(query_type.__name__)}"
-            app.add_route(
-                path,
+            app.add_query(
+                context,
+                _snake(query_type.__name__),
                 self._make_query_endpoint(query_type, handler, container),
-                methods=["GET", "POST"],
-                openapi_parameters=parameters_from_dataclass(query_type),
-                openapi_body_schema=schema_from_dataclass(query_type),
-                openapi_tags=[self.name],
+                request_schema=schema_from_dataclass(query_type),
             )
+
+    def _make_event_endpoint(
+        self, event_type: Type[DomainEvent], handler: Any, container: Any
+    ) -> Callable:
+        async def endpoint(request: Request) -> Response:
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
+            if hasattr(event_type, "__dataclass_fields__"):
+                event = event_type(**{k: body.get(k) for k in getattr(event_type, "__dataclass_fields__", {})})
+            else:
+                event = body
+            if isinstance(handler, type):
+                h = container.resolve(handler)
+                result = await self._call_handler(h, event)
+            else:
+                result = await self._call_handler(handler, event)
+            return JSONResponse({"ok": True} if result is None else {"ok": True, "result": result})
+
+        return endpoint
 
     def _make_command_endpoint(
         self, cmd_type: Type[Command], handler: Type[Any] | Callable[..., Any], container: Any

@@ -43,6 +43,110 @@ impl CoreApp {
         Ok(id.0)
     }
 
+    /// Add command: POST {context}/commands/{name}. Returns handler_id (int).
+    #[pyo3(signature = (context, name, request_schema=None))]
+    fn add_command(
+        &self,
+        context: &str,
+        name: &str,
+        request_schema: Option<&str>,
+    ) -> PyResult<u32> {
+        let schema = request_schema.and_then(|s| serde_json::from_str(s).ok());
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let app = guard
+            .as_mut()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
+        let id = app
+            .add_command(context, name, schema)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(id.0)
+    }
+
+    /// Add query: GET {context}/queries/{name}. Returns handler_id (int).
+    #[pyo3(signature = (context, name, request_schema=None))]
+    fn add_query(
+        &self,
+        context: &str,
+        name: &str,
+        request_schema: Option<&str>,
+    ) -> PyResult<u32> {
+        let schema = request_schema.and_then(|s| serde_json::from_str(s).ok());
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let app = guard
+            .as_mut()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
+        let id = app
+            .add_query(context, name, schema)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(id.0)
+    }
+
+    /// Add RPC route (one POST route at path). Body format: { "method": str, "params": object }.
+    fn add_rpc_route(&self, path: &str) -> PyResult<()> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let app = guard
+            .as_mut()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
+        app.add_rpc_route(path)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    /// Add RPC method. Returns handler_id (int). Callback receives params bytes.
+    #[pyo3(signature = (name, request_schema=None))]
+    fn add_rpc_method(
+        &self,
+        name: &str,
+        request_schema: Option<&str>,
+    ) -> PyResult<u32> {
+        let schema = request_schema.and_then(|s| serde_json::from_str(s).ok());
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let app = guard
+            .as_mut()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
+        let id = app
+            .add_rpc_method(name, schema)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(id.0)
+    }
+
+    /// Subscribe to event type. Returns handler_id (int).
+    fn subscribe_event(&self, event_type_id: &str) -> PyResult<u32> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let app = guard
+            .as_mut()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
+        let id = app.subscribe_event(event_type_id);
+        Ok(id.0)
+    }
+
+    /// Publish event: core calls execute(handler_id, payload) for each subscriber.
+    fn publish_event(&self, event_type_id: &str, payload: &[u8]) -> PyResult<()> {
+        let guard = self
+            .inner
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let app = guard
+            .as_ref()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
+        app.publish_event(event_type_id, payload)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
     /// Set the Python callable invoked as (route_id: int, body_bytes: bytes) -> response_bytes: bytes.
     fn set_handler(&self, handler: pyo3::Py<pyo3::PyAny>) -> PyResult<()> {
         let handlers = Python::with_gil(|py| handler.clone_ref(py));

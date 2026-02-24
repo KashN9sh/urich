@@ -4,6 +4,7 @@ mod protocol;
 
 pub use protocol::{RpcError, RpcServerHandler, RpcTransport};
 
+use std::sync::Arc;
 use serde_json::Value;
 use urich_core::CoreError;
 
@@ -11,9 +12,11 @@ use crate::core::app::Application;
 use crate::core::{Handler, Module, ServiceDiscovery};
 
 /// RPC as object: .server(path, handler) and .client(discovery, transport). Like Python RpcModule.
+/// If .methods(names) is used, core add_rpc_route/add_rpc_method are used; otherwise one route via register_route.
 pub struct RpcModule {
     server_path: Option<String>,
     server_handler: Option<Box<dyn RpcServerHandler>>,
+    server_methods: Option<Vec<String>>,
     client_discovery: Option<Box<dyn ServiceDiscovery>>,
     client_transport: Option<Box<dyn RpcTransport>>,
 }
@@ -23,6 +26,7 @@ impl RpcModule {
         Self {
             server_path: None,
             server_handler: None,
+            server_methods: None,
             client_discovery: None,
             client_transport: None,
         }
@@ -32,6 +36,12 @@ impl RpcModule {
     pub fn server(mut self, path: &str, handler: Box<dyn RpcServerHandler>) -> Self {
         self.server_path = Some(path.trim_matches('/').to_string());
         self.server_handler = Some(handler);
+        self
+    }
+
+    /// Register method names with the core (add_rpc_route + add_rpc_method per name). If not set, one route is used and handler dispatches by body["method"].
+    pub fn methods(mut self, names: &[&str]) -> Self {
+        self.server_methods = Some(names.iter().map(|s| s.to_string()).collect());
         self
     }
 
@@ -56,20 +66,36 @@ impl Default for RpcModule {
 impl Module for RpcModule {
     fn register_into(&mut self, app: &mut Application) -> Result<(), CoreError> {
         if let (Some(path), Some(handler)) = (self.server_path.take(), self.server_handler.take()) {
-            let h: Handler = Box::new(move |body: Value| {
-                let method = body
-                    .get("method")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let params = body.get("params").cloned().unwrap_or(Value::Null);
-                let payload = serde_json::to_vec(&params).unwrap_or_default();
-                match handler.handle(method, &payload) {
-                    Ok(bytes) => serde_json::from_slice(&bytes)
-                        .map_err(|e| CoreError::Validation(e.to_string())),
-                    Err(e) => Err(CoreError::Validation(e.to_string())),
+            if let Some(method_names) = self.server_methods.take() {
+                app.add_rpc_route(&path)?;
+                let handler = Arc::new(handler);
+                for name in method_names {
+                    let name_ref = name.clone();
+                    let h = Arc::clone(&handler);
+                    let handler: Handler = Box::new(move |params_value: Value| {
+                        let payload = serde_json::to_vec(&params_value).unwrap_or_default();
+                        h.handle(&name_ref, &payload)
+                            .map(|bytes| serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+                            .map_err(|e| CoreError::Validation(e.to_string()))
+                    });
+                    app.add_rpc_method(&name, None, handler)?;
                 }
-            });
-            app.register_route("POST", &path, None, h, None)?;
+            } else {
+                let h: Handler = Box::new(move |body: Value| {
+                    let method = body
+                        .get("method")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    let params = body.get("params").cloned().unwrap_or(Value::Null);
+                    let payload = serde_json::to_vec(&params).unwrap_or_default();
+                    match handler.handle(method, &payload) {
+                        Ok(bytes) => serde_json::from_slice(&bytes)
+                            .map_err(|e| CoreError::Validation(e.to_string())),
+                        Err(e) => Err(CoreError::Validation(e.to_string())),
+                    }
+                });
+                app.register_route("POST", &path, None, h, None)?;
+            }
         }
         if let (Some(discovery), Some(transport)) =
             (self.client_discovery.take(), self.client_transport.take())

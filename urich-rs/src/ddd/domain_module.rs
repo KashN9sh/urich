@@ -92,10 +92,16 @@ impl Module for DomainModule {
     fn register_into(&mut self, app: &mut Application) -> Result<(), urich_core::CoreError> {
         let tag = self.context.as_str();
         for (path, handler) in self.commands.drain(..) {
-            app.register_route("POST", &path, None, handler, Some(tag))?;
+            let name = path
+                .strip_prefix(&format!("{}/commands/", self.context))
+                .unwrap_or(&path);
+            app.add_command(&self.context, name, None, handler, Some(tag))?;
         }
         for (path, handler) in self.queries.drain(..) {
-            app.register_route("GET", &path, None, handler, Some(tag))?;
+            let name = path
+                .strip_prefix(&format!("{}/queries/", self.context))
+                .unwrap_or(&path);
+            app.add_query(&self.context, name, None, handler, Some(tag))?;
         }
         for (type_id, handler) in self.event_handlers.drain(..) {
             app.subscribe_event(type_id, handler);

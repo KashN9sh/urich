@@ -57,6 +57,58 @@ class Application:
             route_id = self._core.register_route(method, path_clean, schema_str, tag)
             self._route_handlers[route_id] = (endpoint, method)
 
+    def add_command(
+        self,
+        context: str,
+        name: str,
+        endpoint: Any,
+        *,
+        request_schema: dict[str, Any] | None = None,
+    ) -> None:
+        """Add command: POST {context}/commands/{name}. Core builds path; store handler_id -> endpoint."""
+        schema_str = json.dumps(request_schema) if request_schema else None
+        route_id = self._core.add_command(context, name, schema_str)
+        self._route_handlers[route_id] = (endpoint, "POST")
+
+    def add_query(
+        self,
+        context: str,
+        name: str,
+        endpoint: Any,
+        *,
+        request_schema: dict[str, Any] | None = None,
+        openapi_parameters: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """Add query: GET {context}/queries/{name}. Core builds path; store handler_id -> endpoint."""
+        schema_str = json.dumps(request_schema) if request_schema else None
+        route_id = self._core.add_query(context, name, schema_str)
+        self._route_handlers[route_id] = (endpoint, "GET")
+
+    def add_rpc_route(self, path: str = "rpc") -> None:
+        """Add single RPC POST route. Then use add_rpc_method for each method."""
+        self._core.add_rpc_route(path)
+
+    def add_rpc_method(
+        self,
+        name: str,
+        endpoint: Any,
+        *,
+        request_schema: dict[str, Any] | None = None,
+    ) -> None:
+        """Register RPC method. Callback receives params as bytes (JSON)."""
+        schema_str = json.dumps(request_schema) if request_schema else None
+        route_id = self._core.add_rpc_method(name, schema_str)
+        self._route_handlers[route_id] = (endpoint, "POST")
+
+    def subscribe_event(self, event_type_id: str, endpoint: Any) -> None:
+        """Subscribe to event type. Core returns handler_id; store handler_id -> endpoint."""
+        route_id = self._core.subscribe_event(event_type_id)
+        self._route_handlers[route_id] = (endpoint, "EVENT")
+
+    def publish_event(self, event_type_id: str, payload: bytes) -> None:
+        """Publish event: core calls execute(handler_id, payload) for each subscriber."""
+        self._core.publish_event(event_type_id, payload)
+
     def mount(self, path: str, app: Any) -> None:
         """Not supported when using core backend."""
         raise NotImplementedError("mount() not supported; use core backend only")

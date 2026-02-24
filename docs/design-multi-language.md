@@ -72,15 +72,37 @@ So: **one place for everything (the core); facades are only "register handlers +
 
 ---
 
+## Declarative contract: facade describes, core assembles
+
+**Two phases:**
+
+1. **Construction:** The facade calls the core’s builder API; the core owns all structure (routes, OpenAPI, RPC methods, event subscriptions). The facade does not store route tables or subscription maps — only the mapping `handler_id → callable` for execution.
+2. **Execution:** On each request (or on `publish_event`), the core determines `handler_id`, validates the payload, and calls the facade once: **execute(handler_id, body)**. The facade looks up the callable and returns the result.
+
+So the only contract from core to facade is one callback: **execute(handler_id, body) → response bytes**. Commands, queries, RPC, and events all use it; the core decides how to choose `handler_id` (path, RPC method name, or event type).
+
+**Unified behaviour:** Path conventions, RPC body format `{ "method", "params" }`, and event type identifiers (strings) are defined in the core so that Rust and Python behave the same.
+
+---
+
 ## Callback and schema contract (implemented)
 
 **Core API (Rust):**
 
-- `register_route(method, path, request_schema: Option<Value>, openapi_tag: Option<&str>) -> Result<RouteId>` — path is exact (e.g. `orders/commands/create_order`). Schema is JSON Schema (optional). openapi_tag used for OpenAPI tags (e.g. context name).
-- `set_callback(cb: RequestCallback)` — `RequestCallback = Box<dyn Fn(RouteId, &[u8]) -> Result<Vec<u8>, CoreError> + Send + Sync>`. The core calls this with (route_id, validated body bytes); the host returns response bytes.
-- `handle_request(method, path, body) -> Result<Vec<u8>>` — no HTTP; used by tests and by the HTTP layer when it receives a request.
-- `openapi_spec(title, version) -> Value` — minimal OpenAPI 3.0 JSON from registered routes.
+- **Construction (facade → core):**
+  - `add_command(context, name, request_schema) -> RouteId` — POST `{context}/commands/{name}`.
+  - `add_query(context, name, request_schema) -> RouteId` — GET `{context}/queries/{name}`.
+  - `add_rpc_route(path)` — one POST route for RPC; body = `{ "method": string, "params": object }`.
+  - `add_rpc_method(name, request_schema) -> RouteId` — register RPC method; core dispatches by `method` and calls execute(handler_id, params_bytes).
+  - `subscribe_event(event_type_id: &str) -> RouteId` — event type is a string (e.g. `"OrderCreated"`); core calls execute(handler_id, payload) on `publish_event`.
+  - `publish_event(event_type_id, payload)` — core invokes execute for each subscriber.
+  - `register_route(method, path, request_schema, openapi_tag) -> RouteId` — for custom routes only.
+- **Execution (core → facade):**
+  - `set_callback(cb)` — **execute(handler_id, body):** `RequestCallback = Box<dyn Fn(RouteId, &[u8]) -> Result<Vec<u8>, CoreError> + Send + Sync>`. The core calls this with (handler_id, validated body); the host returns response bytes.
+- **Other:**
+  - `handle_request(method, path, body) -> Result<Vec<u8>>` — no HTTP; used by tests and HTTP layer.
+  - `openapi_spec(title, version) -> Value` — minimal OpenAPI 3.0 from registered routes.
 
-**Schema:** Core accepts optional JSON Schema for the request body. Validation is done in the core (currently parse-only; full jsonschema check can be added). Facades pass schema when registering (Python: from Pydantic/dataclass; Rust: from serde/schemars).
+**Schema:** Core accepts optional JSON Schema for request body (and for RPC params). Facades pass schema when registering (Python: from Pydantic/dataclass; Rust: from serde/schemars).
 
-**Implemented:** See repo — `urich-core/` (Rust), `urich-rs/` (Rust facade + example), `urich-python/` (PyO3 bindings; build with maturin). The Python facade lives in `src/urich/`: Application, DomainModule, etc., use the core via `urich_core_native`; `app.run(host, port)` calls `core.run()`. Single package `urich` = core (native) + Python facade; dependency on the core is direct, not optional.
+**Implemented:** See repo — `urich-core/` (Rust), `urich-rs/` (Rust facade + example), `urich-python/` (PyO3 bindings; build with maturin). The Python facade in `src/urich/` uses `urich_core_native`; Application, DomainModule, RpcModule use the core’s add_command/add_query/add_rpc_*/subscribe_event; `app.run(host, port)` calls `core.run()`. Single package `urich` = core (native) + Python facade; dependency on the core is direct, not optional.

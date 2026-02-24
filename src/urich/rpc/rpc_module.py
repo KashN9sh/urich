@@ -54,43 +54,42 @@ class RpcModule(Module):
         if self._server_path is not None:
             if self._server_handler is not None and isinstance(self._server_handler, type):
                 app.container.register_class(self._server_handler)
-            # Core backend: single route; method name comes from body["method"].
-            app.add_route(
-                self._server_path,
-                self._make_rpc_endpoint(app),
-                methods=["POST"],
-            )
+            app.add_rpc_route(self._server_path)
+            if self._server_handler is not None:
+                h = self._server_handler
+                methods = self._rpc_method_names(h)
+                for method_name in methods:
+                    app.add_rpc_method(
+                        method_name,
+                        self._make_rpc_method_endpoint(app, method_name),
+                    )
         if self._client_discovery is not None:
             app.container.register_instance(ServiceDiscovery, self._client_discovery)
         if self._client_transport is not None:
             app.container.register_instance(RpcTransport, self._client_transport)
             app.container.register_class(RpcClient)
 
-    def _make_rpc_endpoint(self, app: Application) -> Callable:
-        """Minimal endpoint: POST body = JSON {method, params}; response = JSON.
-        Handler returns bytes (e.g. json.dumps(...).encode()). Standard error:
-        return json.dumps({"error": {"code": "NOT_FOUND", "message": "..."}}).encode()."""
+    def _rpc_method_names(self, handler: Any) -> list[str]:
+        if hasattr(handler, "__rpc_methods__"):
+            return list(handler.__rpc_methods__)
+        obj = handler if not isinstance(handler, type) else handler
+        return [
+            m for m in dir(obj)
+            if not m.startswith("_") and m != "handle" and callable(getattr(obj, m, None))
+        ]
+
+    def _make_rpc_method_endpoint(self, app: Application, method_name: str) -> Callable:
         import json
 
         async def endpoint(request: Request) -> Response:
             try:
-                body = await request.json()
+                params = await request.json()
             except Exception:
-                body = {}
-            method = (body.get("method", "") if isinstance(body, dict) else "") or (
-                request.path_params.get("path", "") if request.path_params else ""
-            )
-            params = (body.get("params", {}) if isinstance(body, dict) else {})
+                params = {}
             payload_bytes = json.dumps(params).encode()
-            if self._server_handler is not None:
-                h = app.container.resolve(self._server_handler) if isinstance(self._server_handler, type) else self._server_handler
-                result = await h.handle(method, payload_bytes)
-            else:
-                result = json.dumps({"error": "no handler"}).encode()
-            return Response(
-                content=result,
-                media_type="application/json",
-            )
+            h = app.container.resolve(self._server_handler) if isinstance(self._server_handler, type) else self._server_handler
+            result = await h.handle(method_name, payload_bytes)
+            return Response(content=result, media_type="application/json")
         return endpoint
 
 
