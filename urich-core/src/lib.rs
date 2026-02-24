@@ -6,7 +6,10 @@ pub mod http;
 pub mod router;
 pub mod schema;
 
-pub use asgi::{AsgiApplication, AsgiError, UrichAsgi};
+pub use asgi::{
+    AsgiApplication, AsgiError, AsgiReceive, AsgiReceiveMessage, AsgiSend, AsgiSendMessage,
+    HttpScope, LifespanScope, Scope, UrichAsgi, WsScope,
+};
 pub use http::host_port_from_env_and_args;
 pub use router::{Router, RouteId};
 pub use schema::validate_json;
