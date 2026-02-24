@@ -1,7 +1,8 @@
 """
-CLI for prototyping: create-app, add-context, add-aggregate.
-Generated code composes a DomainModule and registers via app.register(module).
+CLI: run app в стиле uvicorn (urich main:app --host 0.0.0.0 --port 8000) или create-app, add-context, add-aggregate.
 """
+import importlib
+import sys
 from pathlib import Path
 
 try:
@@ -11,7 +12,7 @@ except ImportError:
 
 from urich.cli import templates as T
 
-app = typer.Typer(help="Urich CLI: create app and bounded context.")
+app = typer.Typer(help="Urich CLI: run app (main:app) or create-app, add-context, add-aggregate.")
 
 
 def _ensure_typer():
@@ -100,8 +101,39 @@ def add_aggregate(
     typer.echo(f"Aggregate «{aggregate}» in «{context}»: {ctx_dir}/. In main.py: from {context}.module import {context}_module; app.register({context}_module)")
 
 
+def _run_app_mode(argv: list[str]) -> bool:
+    """Если первый аргумент вида module:app — запуск нашего ASGI (как uvicorn). Возвращает True если обработали."""
+    if not argv or ":" not in argv[0]:
+        return False
+    app_spec = argv[0]
+    host = "127.0.0.1"
+    port = 8000
+    i = 1
+    while i < len(argv):
+        if argv[i] == "--host" and i + 1 < len(argv):
+            host = argv[i + 1]
+            i += 2
+        elif argv[i] == "--port" and i + 1 < len(argv):
+            try:
+                port = int(argv[i + 1])
+            except ValueError:
+                pass
+            i += 2
+        else:
+            i += 1
+    module_name, attr_name = app_spec.split(":", 1)
+    mod = importlib.import_module(module_name)
+    application = getattr(mod, attr_name)
+    application.run(host, port)
+    return True
+
+
 def main() -> None:
-    """Entry point for the urich console command."""
+    """Entry point: urich main:app --host 0.0.0.0 --port 8000 или urich add-context ..."""
+    argv = sys.argv[1:]
+    if _run_app_mode(argv):
+        return
+    _ensure_typer()
     app()
 
 
