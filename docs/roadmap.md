@@ -18,4 +18,6 @@ Public view of what’s done and what we’re aiming for.
 - **Documentation** — layers and DDD conventions within the framework.
 - **Adapters** — more out-of-the-box or example adapters (e.g. Redis event bus, Consul discovery) as optional packages or in `examples/`.
 
+**Multi-language (initial):** **urich-core** (Rust) — HTTP, routing, validation, OpenAPI. **urich-rs** — Rust facade (see `urich-rs/`, example: `cargo run -p urich-rs --example orders`). **urich-python** — PyO3 (build with maturin). See [Multi-language design](design-multi-language.md).
+
 Ideas and contributions are welcome; open an issue or see [Contributing](https://github.com/KashN9sh/urich/blob/main/CONTRIBUTING.md).

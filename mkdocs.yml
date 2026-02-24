@@ -41,6 +41,7 @@ nav:
     - OpenAPI & Swagger: guide/openapi.md
   - Architecture: architecture.md
   - Roadmap: roadmap.md
+  - Design (multi-language): design-multi-language.md
   - Reference:
     - API overview: reference/overview.md
   - Examples:

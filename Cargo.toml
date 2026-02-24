@@ -1,0 +1,4 @@
+[workspace]
+resolver = "2"
+# urich-python is built with maturin (see urich-python/README); omit from default build to avoid link errors.
+members = ["urich-core", "urich-rs"]

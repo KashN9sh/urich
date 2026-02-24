@@ -43,6 +43,9 @@ htmlcov/
 # mypy
 .mypy_cache/
 
+# Rust / Cargo
+target/
+
 # OS
 .DS_Store
 Thumbs.db
