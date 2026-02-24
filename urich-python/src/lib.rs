@@ -181,6 +181,7 @@ impl CoreApp {
                 Ok(CoreResponse {
                     status_code: status,
                     body: bytes.as_bytes().to_vec(),
+                    content_type: None,
                 })
             })
             .map_err(|e: pyo3::PyErr| CoreError::Validation(e.to_string()))
@@ -240,6 +241,26 @@ impl CoreApp {
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
         drop(guard);
         app.run(host, port, openapi_title, openapi_version)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Run HTTP server, читая host/port из env (HOST, PORT) и аргументов (--host, --port). Как uvicorn.
+    fn run_from_env(
+        &self,
+        default_host: &str,
+        default_port: u16,
+        openapi_title: &str,
+        openapi_version: &str,
+    ) -> PyResult<()> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let app = guard
+            .take()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("already run"))?;
+        drop(guard);
+        app.run_from_env(default_host, default_port, openapi_title, openapi_version)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 }

@@ -224,6 +224,7 @@ impl Application {
                 Ok(CoreResponse {
                     status_code: 200,
                     body,
+                    content_type: None,
                 })
             })
         }));
@@ -272,6 +273,21 @@ impl Application {
             self.install_callback();
         }
         self.core.run(host, port, openapi_title, openapi_version)
+    }
+
+    /// Run HTTP server, читая host/port из env (HOST, PORT) и аргументов (--host, --port). Как uvicorn.
+    pub fn run_from_env(
+        mut self,
+        default_host: &str,
+        default_port: u16,
+        openapi_title: &str,
+        openapi_version: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if !self.handlers.is_empty() {
+            self.install_callback();
+        }
+        self.core
+            .run_from_env(default_host, default_port, openapi_title, openapi_version)
     }
 }
 

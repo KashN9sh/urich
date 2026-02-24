@@ -14,4 +14,4 @@ pub use discovery::{DiscoveryModule, StaticDiscovery};
 pub use domain::{AggregateRoot, DomainEvent, Entity, Repository};
 pub use events::{EventBusAdapter, EventBusModule, OutboxModule};
 pub use rpc::{call, RpcClient, RpcError, RpcModule, RpcServerHandler, RpcTransport};
-pub use urich_core::{CoreError, RequestContext, Response as CoreResponse};
+pub use urich_core::{host_port_from_env_and_args, CoreError, RequestContext, Response as CoreResponse};

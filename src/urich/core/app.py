@@ -180,9 +180,15 @@ class Application:
         """DI container: registration and resolution of dependencies."""
         return self._container
 
-    def run(self, host: str = "127.0.0.1", port: int = 8000) -> None:
-        """Run HTTP server (blocks). Serves routes, GET /openapi.json, GET /docs. Call set_handler via dispatcher."""
+    def run(
+        self,
+        host: str = "127.0.0.1",
+        port: int = 8000,
+    ) -> None:
+        """Run HTTP server (blocks). Serves routes, GET /openapi.json, GET /docs.
+        host/port are defaults; env (HOST, PORT) and CLI (--host, --port) override, like uvicorn.
+        """
         if not self._handler_set:
             self._core.set_handler(self._make_dispatcher())
             self._handler_set = True
-        self._core.run(host, port, self._openapi_title, self._openapi_version)
+        self._core.run_from_env(host, port, self._openapi_title, self._openapi_version)

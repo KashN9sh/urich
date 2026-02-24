@@ -16,6 +16,7 @@ fn ok_body(body: &[u8]) -> Response {
     Response {
         status_code: 200,
         body: body.to_vec(),
+        content_type: None,
     }
 }
 
@@ -61,7 +62,7 @@ async fn add_command_and_add_query() {
         } else {
             return Box::pin(ready(Err(CoreError::NotFound("unknown".into()))));
         };
-        Box::pin(ready(Ok(Response { status_code: 200, body: out })))
+        Box::pin(ready(Ok(Response { status_code: 200, body: out, content_type: None })))
     }));
     let out = app.handle_request(&ctx("POST", "orders/commands/create_order", b"{}")).await.unwrap();
     assert_eq!(out.body, b"{\"created\":true}");
@@ -102,7 +103,7 @@ async fn subscribe_and_publish_event() {
     let rec = std::sync::Arc::clone(&received);
     app.set_callback(Box::new(move |rid: RouteId, payload: &[u8], _ctx: &RequestContext| {
         rec.lock().unwrap().push((rid.0, payload.to_vec()));
-        Box::pin(ready(Ok(Response { status_code: 200, body: Vec::new() })))
+        Box::pin(ready(Ok(Response { status_code: 200, body: Vec::new(), content_type: None })))
     }));
     app.publish_event("OrderCreated", b"{\"id\":\"o1\"}").await.unwrap();
     let v = received.lock().unwrap();

@@ -44,6 +44,7 @@ fn require_demo_key(ctx: &RequestContext) -> Option<CoreResponse> {
     Some(CoreResponse {
         status_code: 401,
         body,
+        content_type: None,
     })
 }
 

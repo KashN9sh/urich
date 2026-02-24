@@ -1,9 +1,13 @@
 //! Urich core: routing, validation, request handling, async HTTP server.
+//! Rust ASGI: протокол приложения в модуле asgi.
 
+pub mod asgi;
 pub mod http;
 pub mod router;
 pub mod schema;
 
+pub use asgi::{AsgiApplication, AsgiError, UrichAsgi};
+pub use http::host_port_from_env_and_args;
 pub use router::{Router, RouteId};
 pub use schema::validate_json;
 
@@ -42,11 +46,13 @@ pub struct RequestContext {
     pub body: Vec<u8>,
 }
 
-/// Response: status code and body (so middlewares can return 401, etc.).
+/// Response: status code, body, optional Content-Type (default application/json).
 #[derive(Clone, Debug)]
 pub struct Response {
     pub status_code: u16,
     pub body: Vec<u8>,
+    /// If None, сервер подставляет application/json.
+    pub content_type: Option<String>,
 }
 
 /// Request handler callback: (route_id, payload, context) -> future of response. Stored as Arc so it can be called without holding App lock across await.
@@ -264,6 +270,18 @@ impl App {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let app = Arc::new(std::sync::RwLock::new(self));
         http::run(app, host, port, openapi_title, openapi_version)
+    }
+
+    /// Run HTTP server, читая host/port из env (HOST, PORT) и аргументов (--host, --port). Как uvicorn.
+    pub fn run_from_env(
+        self,
+        default_host: &str,
+        default_port: u16,
+        openapi_title: &str,
+        openapi_version: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let (host, port) = http::host_port_from_env_and_args(default_host, default_port);
+        self.run(&host, port, openapi_title, openapi_version)
     }
 
     /// OpenAPI spec from registered routes (minimal).
