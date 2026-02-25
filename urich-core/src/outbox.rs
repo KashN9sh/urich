@@ -1,4 +1,4 @@
-//! Outbox protocols: storage and publisher. Used by Application and events module.
+//! Outbox protocols: storage and publisher. Shared by Rust and Python facades.
 
 use serde_json::Value;
 

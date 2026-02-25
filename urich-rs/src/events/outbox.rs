@@ -2,8 +2,7 @@
 
 use urich_core::CoreError;
 
-use crate::core::app::Application;
-use crate::core::Module;
+use urich_core::{Application, Module};
 
 use super::protocol::{OutboxPublisher, OutboxStorage};
 

@@ -8,8 +8,7 @@ use std::sync::Arc;
 use serde_json::Value;
 use urich_core::CoreError;
 
-use crate::core::app::Application;
-use crate::core::{Handler, Module, ServiceDiscovery};
+use urich_core::{Application, Container, Handler, Module, ServiceDiscovery};
 
 /// RPC as object: .server(path, handler) and .client(discovery, transport). Like Python RpcModule.
 /// If .methods(names) is used, core add_rpc_route/add_rpc_method are used; otherwise one route via register_route.
@@ -72,7 +71,7 @@ impl Module for RpcModule {
                 for name in method_names {
                     let name_ref = name.clone();
                     let h = Arc::clone(&handler);
-                    let handler: Handler = Box::new(move |params_value: Value, container: Arc<std::sync::Mutex<crate::core::Container>>| {
+                    let handler: Handler = Box::new(move |params_value: Value, container: Arc<std::sync::Mutex<Container>>| {
                         let payload = serde_json::to_vec(&params_value).unwrap_or_default();
                         let name = name_ref.clone();
                         let h = Arc::clone(&h);
@@ -86,7 +85,7 @@ impl Module for RpcModule {
                 }
             } else {
                 let handler = Arc::clone(&handler);
-                let h: Handler = Box::new(move |body: Value, container: Arc<std::sync::Mutex<crate::core::Container>>| {
+                let h: Handler = Box::new(move |body: Value, container: Arc<std::sync::Mutex<Container>>| {
                     let method = body
                         .get("method")
                         .and_then(|v| v.as_str())

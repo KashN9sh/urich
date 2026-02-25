@@ -1,13 +1,12 @@
-//! HttpModule: route module by prefix. Like Python core/routing.
+//! HttpModule: route module by prefix. Shared by facades.
 
 use std::sync::Arc;
-use urich_core::CoreError;
 
-use super::app::Application;
-use super::{Handler, Module};
+use crate::application::{Application, Handler};
+use crate::module::Module;
+use crate::CoreError;
 
-/// HTTP module (bounded context): name + routes. Like Python HttpModule.
-/// Attach via app.register(module). Similar to include_router in FastAPI.
+/// HTTP module (bounded context): name + routes. Attach via app.register(module).
 pub struct HttpModule {
     pub name: String,
     pub prefix: String,
@@ -23,8 +22,6 @@ impl HttpModule {
         }
     }
 
-    /// Add a route. path without leading slash is under the module prefix.
-    /// methods e.g. ["GET"], ["GET", "POST"].
     pub fn route(
         mut self,
         path: &str,

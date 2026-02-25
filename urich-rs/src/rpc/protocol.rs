@@ -26,6 +26,6 @@ pub trait RpcServerHandler: Send + Sync {
         &self,
         method: &str,
         payload: &[u8],
-        container: std::sync::Arc<std::sync::Mutex<crate::core::Container>>,
+        container: std::sync::Arc<std::sync::Mutex<urich_core::Container>>,
     ) -> Result<Vec<u8>, RpcError>;
 }

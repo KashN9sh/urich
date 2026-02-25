@@ -1,18 +1,32 @@
 //! Urich core: routing, validation, request handling, async HTTP server.
-//! Rust ASGI: протокол приложения в модуле asgi.
+//! Application layer (Application, Container, Module, Handler, discovery, outbox) is shared by Rust and Python facades.
 
+pub mod application;
 pub mod asgi;
+pub mod container;
 pub mod http;
+pub mod into_core_error;
+pub mod module;
+pub mod outbox;
 pub mod router;
+pub mod routing;
 pub mod schema;
+pub mod service_discovery;
 
+pub use application::{Application, EventHandler, ExternalCallback, Handler, Middleware};
 pub use asgi::{
     AsgiApplication, AsgiError, AsgiReceive, AsgiReceiveMessage, AsgiSend, AsgiSendMessage,
     HttpScope, LifespanScope, Scope, UrichAsgi, WsScope,
 };
+pub use container::{Container, ContainerError};
 pub use http::host_port_from_env_and_args;
+pub use into_core_error::IntoCoreError;
+pub use module::Module;
+pub use outbox::{OutboxPublisher, OutboxStorage};
 pub use router::{Router, RouteId};
+pub use routing::HttpModule;
 pub use schema::validate_json;
+pub use service_discovery::ServiceDiscovery;
 
 use std::collections::HashMap;
 use std::future::Future;

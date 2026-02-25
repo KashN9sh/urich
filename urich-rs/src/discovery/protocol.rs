@@ -1,6 +1,6 @@
 //! Service Discovery implementations. Trait is in core::service_discovery.
 
-use crate::core::ServiceDiscovery;
+use urich_core::ServiceDiscovery;
 
 /// Discovery from static config (name -> URL map). Like Python StaticDiscovery.
 #[derive(Clone, Default)]

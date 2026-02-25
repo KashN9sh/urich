@@ -35,8 +35,10 @@
 └─────────────────────┘               └─────────────────────┘
 ```
 
-- **Core** (`urich-core`) = HTTP + routing + parse + validate + serialize. It runs the server and invokes the host (Python or Rust) only to execute the handler for the matched route. One implementation for both languages.
+- **Core** = the crate **`urich-core`**. HTTP + routing + parse + validate + serialize. It runs the server and invokes the host (Python or Rust) only to execute the handler for the matched route. One implementation for both languages. Python bindings (`urich_core_native`) call this crate directly; Rust uses it via `urich-rs`.
 - **Facades** = language bindings only: "register this handler for this route", "start the core". Your app depends only on `urich` (Python) or `urich-rs` (Rust). The Python package `urich` depends directly on the core (e.g. `urich-core-native` from the same repo); one wheel can be built with maturin (core + Python facade). No Starlette, no ASGI, no extra web framework.
+- **Naming:** The shared kernel is the **crate** `urich-core`. It contains both the low-level App (routing, callback) and the **application layer**: Application, Container, Module, Handler, Middleware, ServiceDiscovery, OutboxStorage/OutboxPublisher, IntoCoreError, HttpModule. So changes to that layer propagate to both Rust and Python. The **urich-rs** crate only contains concrete feature implementations: ddd, discovery, domain, events, rpc.
+- **Python:** The Python bindings (`urich-python`) now use **Application** from urich-core instead of raw App. They call `add_command_route`, `add_query_route`, `add_rpc_route`, `add_rpc_method_route`, `subscribe_event_route`, then `set_external_callback` with a single Python callable `(route_id, body_bytes, context) -> (status, response_bytes)`, then `run` / `run_from_env`. So the same Application layer (routes, middleware hook, one callback) is used; only the handler is provided by Python.
 
 When you change the core, both languages get it. Facades change only if the registration/start API of the core changes.
 

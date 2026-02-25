@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-pub use crate::core::{OutboxPublisher, OutboxStorage};
+pub use urich_core::{OutboxPublisher, OutboxStorage};
 
 /// Event bus adapter. User supplies implementation (in-memory, Redis, etc.).
 /// In Rust the default is in-app (Application::subscribe_event / publish_event).

@@ -8,8 +8,7 @@ pub use protocol::{EventBusAdapter, OutboxPublisher, OutboxStorage};
 
 use urich_core::CoreError;
 
-use crate::core::app::Application;
-use crate::core::Module;
+use urich_core::{Application, Module};
 
 /// Event bus as object. In Rust the default event bus is inside Application (subscribe_event / publish_event).
 /// This module is a no-op placeholder for API consistency with Python; optionally register custom adapter in container.

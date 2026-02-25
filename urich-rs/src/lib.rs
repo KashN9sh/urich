@@ -1,13 +1,15 @@
-//! Urich Rust facade: Application, Module trait, register and run on urich-core.
+//! Urich Rust facade: DDD, RPC, discovery, events on urich-core. Application, Container, Module live in urich-core (shared with Python).
 
-pub mod core;
 pub mod ddd;
 pub mod discovery;
 pub mod domain;
 pub mod events;
 pub mod rpc;
 
-pub use core::{Application, Container, ContainerError, Handler, HttpModule, IntoCoreError, Middleware, Module, OutboxPublisher, OutboxStorage, ServiceDiscovery};
+pub use urich_core::{
+    Application, Container, ContainerError, EventHandler, Handler, HttpModule, IntoCoreError,
+    Middleware, Module, OutboxPublisher, OutboxStorage, ServiceDiscovery,
+};
 pub use ddd::{Command, CommandHandler, DomainModule, Query, QueryHandler};
 pub use urich_rs_macros::{Command, Query}; // derive macros (trait and macro share name in different namespaces)
 pub use discovery::{DiscoveryModule, StaticDiscovery};

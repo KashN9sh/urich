@@ -4,12 +4,7 @@ mod protocol;
 
 pub use protocol::StaticDiscovery;
 
-use crate::core::ServiceDiscovery;
-
-use urich_core::CoreError;
-
-use crate::core::app::Application;
-use crate::core::Module;
+use urich_core::{Application, CoreError, Module, ServiceDiscovery};
 
 /// Discovery as object: one adapter (static, or custom). Like Python DiscoveryModule.
 /// Register via app.register(discovery). Available on Application via .discovery().

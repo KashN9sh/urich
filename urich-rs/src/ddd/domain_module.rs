@@ -5,9 +5,7 @@ use std::any::TypeId;
 use std::sync::{Arc, Mutex};
 use urich_core::CoreError as CoreErrorInner;
 
-use crate::core::app::{Application, EventHandler, Handler};
-use crate::core::container::Container;
-use crate::core::Module;
+use urich_core::{Application, Container, EventHandler, Handler, Module};
 use crate::ddd::{CommandHandler, QueryHandler};
 use crate::domain::{AggregateRoot, DomainEvent};
 
