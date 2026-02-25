@@ -108,7 +108,7 @@ So the only contract from core to facade is one callback: **execute(handler_id, 
 
 **Schema:** Core accepts optional JSON Schema for request body (and for RPC params). Facades pass schema when registering (Python: from Pydantic/dataclass; Rust: from serde/schemars).
 
-**Implemented:** See repo — `urich-core/` (Rust), `urich-rs/` (Rust facade + example), `urich-python/` (PyO3 bindings; build with maturin). The Python facade in `src/urich/` uses `urich_core_native`; Application, DomainModule, RpcModule use the core’s add_command/add_query/add_rpc_*/subscribe_event; `app.run(host, port)` calls `core.run()`. Single package `urich` = core (native) + Python facade; dependency on the core is direct, not optional.
+**Implemented:** See repo — `urich-core/` (Rust), `urich-rs/` (Rust facade + example), `urich-python/` (PyO3 bindings; build with maturin). The Python facade in `urich-python/python/urich/` uses `urich_core_native`; Application, DomainModule, RpcModule use the core’s add_command/add_query/add_rpc_*/subscribe_event; `app.run(host, port)` calls `core.run()`. Single package `urich` = core (native) + Python facade; dependency on the core is direct, not optional.
 
 ---
 

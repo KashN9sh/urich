@@ -37,7 +37,7 @@ urich = "urich.cli.main:main"
 
 [tool.maturin]
 manifest-path = "urich-python/Cargo.toml"
-python-source = "src"
+python-source = "urich-python/python"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
