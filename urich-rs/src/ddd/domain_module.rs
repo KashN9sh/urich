@@ -8,13 +8,18 @@ use urich_core::CoreError as CoreErrorInner;
 use crate::core::app::{Application, EventHandler, Handler};
 use crate::core::container::Container;
 use crate::core::Module;
+use crate::ddd::{CommandHandler, QueryHandler};
 use crate::domain::{AggregateRoot, DomainEvent};
+
+/// (path, handler, optional request schema for OpenAPI/validation)
+pub(crate) type CommandEntry = (String, Handler, Option<Value>);
+pub(crate) type QueryEntry = (String, Handler, Option<Value>);
 
 /// Domain module (bounded context): .aggregate().command()/.command_type().query()/.query_type().on_event() then app.register(module).
 pub struct DomainModule {
     pub(crate) context: String,
-    pub(crate) commands: Vec<(String, Handler)>,
-    pub(crate) queries: Vec<(String, Handler)>,
+    pub(crate) commands: Vec<CommandEntry>,
+    pub(crate) queries: Vec<QueryEntry>,
     pub(crate) aggregate_name: Option<String>,
     pub(crate) event_handlers: Vec<(TypeId, EventHandler)>,
 }
@@ -62,7 +67,7 @@ impl DomainModule {
         Fut: std::future::Future<Output = Result<Value, CoreErrorInner>> + Send + 'static,
     {
         let path = format!("{}/commands/{}", self.context, name);
-        self.commands.push((path, Box::new(move |body, container| Box::pin(handler(body, container)))));
+        self.commands.push((path, Box::new(move |body, container| Box::pin(handler(body, container))), None));
         self
     }
 
@@ -77,7 +82,7 @@ impl DomainModule {
         Fut: std::future::Future<Output = Result<Value, CoreErrorInner>> + Send + 'static,
     {
         let path = format!("{}/queries/{}", self.context, name);
-        self.queries.push((path, Box::new(move |body, container| Box::pin(handler(body, container)))));
+        self.queries.push((path, Box::new(move |body, container| Box::pin(handler(body, container))), None));
         self
     }
 
@@ -100,7 +105,51 @@ impl DomainModule {
                 handler(body, &*guard)
             })
         });
-        self.commands.push((path, h));
+        self.commands.push((path, h, C::request_schema()));
+        self
+    }
+
+    /// Add command by type with async handler: body deserialized into `C`, handler receives (command, Arc<Container>). For DI + async (e.g. db.run().await).
+    pub fn command_type_async<C, F, Fut>(mut self, handler: F) -> Self
+    where
+        C: crate::ddd::Command + Send + 'static,
+        F: Fn(C, Arc<Mutex<Container>>) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Result<Value, CoreErrorInner>> + Send + 'static,
+    {
+        let path = format!("{}/commands/{}", self.context, C::name());
+        let h: Handler = Box::new(move |body: Value, container: Arc<Mutex<Container>>| {
+            let c = match serde_json::from_value::<C>(body) {
+                Ok(c) => c,
+                Err(e) => return Box::pin(async move { Err(CoreErrorInner::Validation(e.to_string())) }),
+            };
+            Box::pin(handler(c, container))
+        });
+        self.commands.push((path, h, C::request_schema()));
+        self
+    }
+
+    /// Add command with handler type: resolve `H` from container (must be registered with `register_factory`), call `handler.handle(cmd)`. No lock/resolve in module code.
+    pub fn command_with_handler<C, H>(mut self) -> Self
+    where
+        C: crate::ddd::Command + Send + 'static,
+        H: CommandHandler<C> + Clone + Send + Sync + 'static,
+    {
+        let path = format!("{}/commands/{}", self.context, C::name());
+        let h: Handler = Box::new(move |body: Value, container: Arc<Mutex<Container>>| {
+            Box::pin(async move {
+                let handler = {
+                    let mut guard = container.lock().unwrap();
+                    guard
+                        .resolve::<H>()
+                        .map_err(|e| CoreErrorInner::Validation(e.to_string()))?
+                        .clone()
+                };
+                let c: C = serde_json::from_value(body)
+                    .map_err(|e| CoreErrorInner::Validation(e.to_string()))?;
+                handler.handle(c).await
+            })
+        });
+        self.commands.push((path, h, C::request_schema()));
         self
     }
 
@@ -123,7 +172,32 @@ impl DomainModule {
                 handler(body, &*guard)
             })
         });
-        self.queries.push((path, h));
+        self.queries.push((path, h, Q::request_schema()));
+        self
+    }
+
+    /// Add query with handler type: resolve `H` from container (must be registered with `register_factory`), call `handler.handle(query)`. No lock/resolve in module code.
+    pub fn query_with_handler<Q, H>(mut self) -> Self
+    where
+        Q: crate::ddd::Query + Send + 'static,
+        H: QueryHandler<Q> + Clone + Send + Sync + 'static,
+    {
+        let path = format!("{}/queries/{}", self.context, Q::name());
+        let h: Handler = Box::new(move |body: Value, container: Arc<Mutex<Container>>| {
+            Box::pin(async move {
+                let handler = {
+                    let mut guard = container.lock().unwrap();
+                    guard
+                        .resolve::<H>()
+                        .map_err(|e| CoreErrorInner::Validation(e.to_string()))?
+                        .clone()
+                };
+                let q: Q = serde_json::from_value(body)
+                    .map_err(|e| CoreErrorInner::Validation(e.to_string()))?;
+                handler.handle(q).await
+            })
+        });
+        self.queries.push((path, h, Q::request_schema()));
         self
     }
 }
@@ -131,17 +205,17 @@ impl DomainModule {
 impl Module for DomainModule {
     fn register_into(&mut self, app: &mut Application) -> Result<(), urich_core::CoreError> {
         let tag = self.context.as_str();
-        for (path, handler) in self.commands.drain(..) {
+        for (path, handler, request_schema) in self.commands.drain(..) {
             let name = path
                 .strip_prefix(&format!("{}/commands/", self.context))
                 .unwrap_or(&path);
-            app.add_command(&self.context, name, None, handler, Some(tag))?;
+            app.add_command(&self.context, name, request_schema, handler, Some(tag))?;
         }
-        for (path, handler) in self.queries.drain(..) {
+        for (path, handler, request_schema) in self.queries.drain(..) {
             let name = path
                 .strip_prefix(&format!("{}/queries/", self.context))
                 .unwrap_or(&path);
-            app.add_query(&self.context, name, None, handler, Some(tag))?;
+            app.add_query(&self.context, name, request_schema, handler, Some(tag))?;
         }
         for (type_id, handler) in self.event_handlers.drain(..) {
             app.subscribe_event(type_id, handler);

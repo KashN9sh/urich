@@ -10,7 +10,7 @@ pub enum ContainerError {
     NotFound,
 }
 
-type FactoryFn = Box<dyn Fn(&Container) -> Box<dyn Any + Send + Sync> + Send + Sync>;
+type FactoryFn = Box<dyn Fn(&mut Container) -> Box<dyn Any + Send + Sync> + Send + Sync>;
 
 /// Minimal DI container: register instance or factory by type or by string key. Like Python Container.
 pub struct Container {
@@ -35,14 +35,14 @@ impl Container {
         self.store.insert(TypeId::of::<T>(), Box::new(value));
     }
 
-    /// Register a factory; on first resolve the factory is called with &self and the result is cached (singleton). Like Python register(key, factory).
+    /// Register a factory; on first resolve the factory is called with &mut self and the result is cached (singleton). Like Python register(key, factory). Factory can call c.resolve::<D>() for dependencies.
     pub fn register_factory<T, F>(&mut self, f: F)
     where
         T: Send + Sync + 'static,
-        F: Fn(&Container) -> T + Send + Sync + 'static,
+        F: Fn(&mut Container) -> T + Send + Sync + 'static,
     {
         let type_id = TypeId::of::<T>();
-        let factory: FactoryFn = Box::new(move |c: &Container| {
+        let factory: FactoryFn = Box::new(move |c: &mut Container| {
             let value = f(c);
             Box::new(value) as Box<dyn Any + Send + Sync>
         });
@@ -54,7 +54,7 @@ impl Container {
         let type_id = TypeId::of::<T>();
         if self.store.get(&type_id).is_none() {
             if let Some(factory) = self.factories.remove(&type_id) {
-                let value = factory(self);
+                let value = factory(self); // &mut self so factory can resolve other deps
                 self.store.insert(type_id, value);
             }
         }
@@ -82,10 +82,10 @@ impl Container {
     where
         K: Into<String>,
         T: Send + Sync + 'static,
-        F: Fn(&Container) -> T + Send + Sync + 'static,
+        F: Fn(&mut Container) -> T + Send + Sync + 'static,
     {
         let key = key.into();
-        let factory: FactoryFn = Box::new(move |c: &Container| {
+        let factory: FactoryFn = Box::new(move |c: &mut Container| {
             let value = f(c);
             Box::new(value) as Box<dyn Any + Send + Sync>
         });

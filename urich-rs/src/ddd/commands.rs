@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use serde::de::DeserializeOwned;
+use serde_json::Value as JsonValue;
 
 /// PascalCase → snake_case. E.g. "CreateOrder" → "create_order".
 fn type_name_to_snake_case(name: &str) -> String {
@@ -43,6 +44,7 @@ fn cached_type_name<T: ?Sized + 'static>() -> &'static str {
 
 /// Command: type describes route name and body shape. Like Python `@dataclass class CreateOrder(Command): order_id: str`.
 /// Name defaults to snake_case of the type name (e.g. `CreateOrder` → `create_order`). Override `name()` to customize.
+/// Override `request_schema()` to provide JSON Schema for OpenAPI/validation (default: None).
 pub trait Command: DeserializeOwned
 where
     Self: 'static,
@@ -53,10 +55,19 @@ where
     {
         cached_type_name::<Self>()
     }
+
+    /// Optional JSON Schema for request body. Used for OpenAPI and validation. Default: None.
+    fn request_schema() -> Option<JsonValue>
+    where
+        Self: Sized,
+    {
+        None
+    }
 }
 
 /// Query: type describes route name and params shape. Like Python `@dataclass class GetOrder(Query): order_id: str`.
 /// Name defaults to snake_case of the type name. Override `name()` to customize.
+/// Override `request_schema()` to provide JSON Schema for OpenAPI/validation (default: None).
 pub trait Query: DeserializeOwned
 where
     Self: 'static,
@@ -66,5 +77,13 @@ where
         Self: Sized,
     {
         cached_type_name::<Self>()
+    }
+
+    /// Optional JSON Schema for params. Used for OpenAPI and validation. Default: None.
+    fn request_schema() -> Option<JsonValue>
+    where
+        Self: Sized,
+    {
+        None
     }
 }
