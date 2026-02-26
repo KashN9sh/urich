@@ -9,10 +9,10 @@ from typing import Any, Protocol, runtime_checkable
 class EventBus(Protocol):
     """Event bus protocol: publish and subscribe. Implementation by user or EventBusModule."""
 
-    async def publish(self, event: "DomainEvent") -> None:
+    async def publish(self, event: object) -> None:
         ...
 
-    def subscribe(self, event_type: type["DomainEvent"], handler: Any) -> None:
+    def subscribe(self, event_type: type, handler: Any) -> None:
         ...
 
 
@@ -33,12 +33,12 @@ class InProcessEventDispatcher:
     def __init__(self) -> None:
         self._handlers: dict[type, list[Any]] = {}
 
-    def subscribe(self, event_type: type[DomainEvent], handler: Any) -> None:
+    def subscribe(self, event_type: type, handler: Any) -> None:
         if event_type not in self._handlers:
             self._handlers[event_type] = []
         self._handlers[event_type].append(handler)
 
-    async def publish(self, event: DomainEvent) -> None:
+    async def publish(self, event: object) -> None:
         event_type = type(event)
         for handler in self._handlers.get(event_type, []):
             if callable(handler):

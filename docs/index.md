@@ -50,7 +50,12 @@ Routes by convention: `POST /orders/commands/create_order`, `GET /orders/queries
 - [Why Urich](guide/why-urich.md) — for whom, and how it compares to FastAPI
 - [Application & modules](guide/application.md) — Application, container, config, HttpModule
 - [Domain module](guide/domain-module.md) — bounded context, commands, queries, events
-- [Domain building blocks](guide/domain-building-blocks.md) — Entity, ValueObject, AggregateRoot, Repository, EventBus
+- [Domain without Urich](guide/domain-without-framework.md) — domain with no framework imports; auto-discovery of events
+- [Domain independence](guide/domain-independence.md) — what should stay free of Urich (repositories, events, commands)
+- [Domain building blocks](guide/domain-building-blocks.md) — Entity, ValueObject, Repository, EventBus
+- [Multi-aggregate operations](guide/multi-aggregate.md) — commands that touch several aggregates
+- [DI: services & strategies](guide/di-services-strategies.md) — `.bind()` for domain services and adapters
+- [Stateless context](guide/stateless-context.md) — module without aggregate or repository
 - [Other modules](guide/other-modules.md) — EventBus, Outbox, Discovery, RPC
 - [OpenAPI & Swagger](guide/openapi.md) — docs and request schemas
 - [Architecture](architecture.md) — design, module protocol, DI, request flow

@@ -1,6 +1,6 @@
 # Domain building blocks
 
-Urich provides base types for the domain layer: **Entity**, **ValueObject**, **AggregateRoot**, **DomainEvent**, **Repository**, and **EventBus**. Import from `urich.domain`.
+Urich provides base types for the domain layer: **Entity**, **ValueObject**, **DomainEvent**, **Repository**, and **EventBus**. Import from `urich.domain`. You can also keep the domain **free of Urich** and use plain types; see [Domain without Urich](domain-without-framework.md).
 
 ---
 
@@ -32,37 +32,6 @@ class Money(ValueObject):
     amount_cents: int
     currency: str
 ```
-
----
-
-## AggregateRoot
-
-Extends **Entity**. Holds a list of **pending domain events** that are raised during work and collected when the aggregate is saved.
-
-```python
-from urich.domain import AggregateRoot, DomainEvent
-from dataclasses import dataclass
-
-@dataclass
-class OrderCreated(DomainEvent):
-    order_id: str
-    customer_id: str
-    total_cents: int
-
-class Order(AggregateRoot):
-    def __init__(self, id: str, customer_id: str, total_cents: int):
-        super().__init__(id=id)
-        self.customer_id = customer_id
-        self.total_cents = total_cents
-        self.raise_event(OrderCreated(order_id=id, customer_id=customer_id, total_cents=total_cents))
-
-    # Later: order.collect_pending_events() returns the list and clears it
-```
-
-**API:**
-
-- **`raise_event(event: DomainEvent)`** — Appends the event to the pending list.
-- **`collect_pending_events() -> list[DomainEvent]`** — Returns the list and clears it. Typically called in the application layer after `repo.add()` or `repo.save()`, then each event is published to the EventBus.
 
 ---
 
@@ -134,7 +103,6 @@ await self._event_bus.publish(OrderCreated(...))
 from urich.domain import (
     Entity,
     ValueObject,
-    AggregateRoot,
     DomainEvent,
     Repository,
     EventBus,

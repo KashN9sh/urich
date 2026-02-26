@@ -55,7 +55,7 @@ String annotations (e.g. from `from __future__ import annotations`) are resolved
 | Package | Role |
 |---------|------|
 | **urich** | Application, Container, Module, HttpModule, Config. |
-| **urich.domain** | Entity, ValueObject, AggregateRoot, DomainEvent, Repository, EventBus, InProcessEventDispatcher. |
+| **urich.domain** | Entity, ValueObject, DomainEvent, Repository, EventBus, InProcessEventDispatcher. |
 | **urich.ddd** | DomainModule, Command, Query. |
 | **urich.events** | EventBusModule, EventBusAdapter, OutboxModule, OutboxStorage, OutboxPublisher. |
 | **urich.discovery** | DiscoveryModule, ServiceDiscovery, static_discovery. |

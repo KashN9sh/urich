@@ -13,7 +13,7 @@ from starlette.responses import JSONResponse, Response
 from urich.core.app import Application
 from urich.core.module import Module
 from urich.core.openapi import parameters_from_dataclass, schema_from_dataclass
-from urich.domain import AggregateRoot, DomainEvent, Repository
+from urich.domain import Repository
 from urich.domain.events import EventBus
 from urich.ddd.commands import Command, Query
 
@@ -25,25 +25,32 @@ def _snake(name: str) -> str:
 class DomainModule(Module):
     """
     One object = full bounded context.
-    .aggregate() .repository() .command() .query() .on_event()
+    .aggregate() .repository() .command() .query() .on_event() .bind()
     Register via app.register(module).
     """
 
     def __init__(self, name: str, prefix: str | None = None) -> None:
         self.name = name
         self.prefix = prefix or f"/{name}"
-        self._aggregate_root: Type[AggregateRoot] | None = None
+        self._aggregate_root: Type[Any] | None = None
         self._repositories: list[tuple[Type[Repository[Any]], Type[Any]]] = []
+        self._bindings: list[tuple[Type[Any], Type[Any]]] = []
         self._commands: list[tuple[Type[Command], Type[Any]]] = []
         self._queries: list[tuple[Type[Query], Type[Any]]] = []
-        self._event_handlers: list[tuple[Type[DomainEvent], Any]] = []
+        self._event_handlers: list[tuple[type, Any]] = []
 
-    def aggregate(self, root: Type[AggregateRoot]) -> DomainModule:
+    def aggregate(self, root: Type[Any]) -> DomainModule:
+        """Register aggregate root type (optional metadata). Event publishing is done in the handler."""
         self._aggregate_root = root
         return self
 
     def repository(self, interface: Type[Repository[Any]], impl: Type[Any]) -> DomainModule:
         self._repositories.append((interface, impl))
+        return self
+
+    def bind(self, interface: Type[Any], impl: Type[Any]) -> DomainModule:
+        """Register any interface → implementation for DI (e.g. domain services, strategies)."""
+        self._bindings.append((interface, impl))
         return self
 
     def command(self, cmd_type: Type[Command], handler: Type[Any] | Callable[..., Any]) -> DomainModule:
@@ -54,7 +61,7 @@ class DomainModule(Module):
         self._queries.append((query_type, handler))
         return self
 
-    def on_event(self, event_type: Type[DomainEvent], handler: Any) -> DomainModule:
+    def on_event(self, event_type: type, handler: Any) -> DomainModule:
         self._event_handlers.append((event_type, handler))
         return self
 
@@ -63,6 +70,11 @@ class DomainModule(Module):
 
         # Repositories: interface -> implementation
         for iface, impl in self._repositories:
+            container.register_class(impl)
+            container.register(iface, lambda c=container, i=impl: c.resolve(i))
+
+        # Arbitrary bindings (domain services, strategies, adapters)
+        for iface, impl in self._bindings:
             container.register_class(impl)
             container.register(iface, lambda c=container, i=impl: c.resolve(i))
 
@@ -117,7 +129,10 @@ class DomainModule(Module):
                 result = await self._call_handler(h, cmd)
             else:
                 result = await self._call_handler(handler, cmd)
-            return JSONResponse({"ok": True, "result": result} if result is not None else {"ok": True})
+            response_result = getattr(result, "id", result) if result is not None else None
+            return JSONResponse(
+                {"ok": True, "result": response_result} if response_result is not None else {"ok": True}
+            )
         return endpoint
 
     def _make_query_endpoint(

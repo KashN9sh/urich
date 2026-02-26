@@ -22,7 +22,6 @@ Main public types and where to import them from. For full signatures, see the so
 |--------|-------------|
 | `Entity` | Base for entities; equality by `id`. |
 | `ValueObject` | Frozen dataclass base; equality by fields. |
-| `AggregateRoot` | Entity + `raise_event()`, `collect_pending_events()`. |
 | `DomainEvent` | Base for domain events (dataclass subclasses). |
 | `Repository[T]` | Abstract: `get(id)`, `add(aggregate)`, `save(aggregate)`. |
 | `EventBus` | Protocol: `publish(event)`, `subscribe(event_type, handler)`. |

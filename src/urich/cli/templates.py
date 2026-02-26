@@ -2,7 +2,7 @@
 
 DOMAIN_PY = '''"""Domain {context}: aggregate and events."""
 from dataclasses import dataclass
-from urich.domain import AggregateRoot, DomainEvent
+from urich.domain import DomainEvent
 
 
 @dataclass
@@ -12,10 +12,10 @@ class {aggregate}Created(DomainEvent):
     # add fields
 
 
-class {aggregate}(AggregateRoot):
-    def __init__(self, id: str):
-        super().__init__(id=id)
-        self.raise_event({aggregate}Created({aggregate_lower}_id=id))
+@dataclass
+class {aggregate}:
+    id: str
+    # add fields
 '''
 
 APPLICATION_PY = '''"""Application layer: commands, queries, handlers."""
@@ -48,8 +48,7 @@ class Create{aggregate}Handler:
     async def __call__(self, cmd: Create{aggregate}) -> str:
         agg = {aggregate}(id=cmd.{aggregate_lower}_id)
         await self._repo.add(agg)
-        for e in agg.collect_pending_events():
-            await self._event_bus.publish(e)
+        await self._event_bus.publish({aggregate}Created({aggregate_lower}_id=agg.id))
         return agg.id
 
 
@@ -126,7 +125,7 @@ app = Application()
 '''
 
 CONTEXT_SKELETON = '''"""Domain {context}."""
-from urich.domain import AggregateRoot, DomainEvent
+from urich.domain import DomainEvent
 
 # Add aggregates and events or run: urich add-aggregate {context} <AggregateName>
 '''

@@ -39,9 +39,22 @@ Order of registration: discovery and event bus first, then domain modules, then 
 
 | File | Purpose |
 |------|---------|
-| **domain.py** | `Order` (AggregateRoot), `OrderCreated` (DomainEvent). |
-| **application.py** | `CreateOrder`, `GetOrder` (Command/Query), handlers with repo + EventBus injection. |
-| **infrastructure.py** | `IOrderRepository`, in-memory `OrderRepositoryImpl`. |
-| **module.py** | `DomainModule("orders").aggregate(...).repository(...).command(...).query(...).on_event(...)`. |
+| **domain.py** | `Order`, `Inventory` (dataclasses), `OrderCreated`, `StockReserved` (DomainEvents). |
+| **application.py** | `CreateOrder`, `GetOrder`, `ReserveForOrder` (multi-aggregate command), handlers with repo(s) + EventBus injection. |
+| **infrastructure.py** | `IOrderRepository`, `IInventoryRepository`, in-memory implementations. |
+| **module.py** | `DomainModule("orders").aggregate(Order).aggregate(Inventory).repository(...).repository(...).command(...).on_event(...)`. |
 
-This is the same structure the CLI generates with `add-context` and `add-aggregate`.
+## Pricing context (domain service and strategy via .bind())
+
+**pricing/** — Bounded context with no aggregate and no repository; only domain service and strategy registered via `.bind()`:
+
+| File | Purpose |
+|------|---------|
+| **domain.py** | `IPricingService`, `IDiscountStrategy` (Protocols). |
+| **infrastructure.py** | `PricingServiceImpl`, `PercentDiscountStrategy`. |
+| **application.py** | `CalculatePrice` command, handler that injects `IPricingService`. |
+| **module.py** | `DomainModule("pricing").bind(IDiscountStrategy, ...).bind(IPricingService, ...).command(...).query(...)`. |
+
+## Stateless context (no persistence)
+
+**stateless_module.py** — A module with only commands and queries (no `.aggregate()`, no `.repository()`): commission calculator and validator. See [Stateless context](../guide/stateless-context.md).
