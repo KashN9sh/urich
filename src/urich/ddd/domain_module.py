@@ -32,36 +32,36 @@ class DomainModule(Module):
     def __init__(self, name: str, prefix: str | None = None) -> None:
         self.name = name
         self.prefix = prefix or f"/{name}"
-        self._aggregate_root: Type[Any] | None = None
+        self._aggregate_roots: list[Type[Any]] = []
         self._repositories: list[tuple[Type[Repository[Any]], Type[Any]]] = []
         self._bindings: list[tuple[Type[Any], Type[Any]]] = []
         self._commands: list[tuple[Type[Command], Type[Any]]] = []
         self._queries: list[tuple[Type[Query], Type[Any]]] = []
         self._event_handlers: list[tuple[type, Any]] = []
 
-    def aggregate(self, root: Type[Any]) -> DomainModule:
+    def aggregate(self, root: Type[Any]) -> "DomainModule":
         """Register aggregate root type (optional metadata). Event publishing is done in the handler."""
-        self._aggregate_root = root
+        self._aggregate_roots.append(root)
         return self
 
-    def repository(self, interface: Type[Repository[Any]], impl: Type[Any]) -> DomainModule:
+    def repository(self, interface: Type[Repository[Any]], impl: Type[Any]) -> "DomainModule":
         self._repositories.append((interface, impl))
         return self
 
-    def bind(self, interface: Type[Any], impl: Type[Any]) -> DomainModule:
+    def bind(self, interface: Type[Any], impl: Type[Any]) -> "DomainModule":
         """Register any interface → implementation for DI (e.g. domain services, strategies)."""
         self._bindings.append((interface, impl))
         return self
 
-    def command(self, cmd_type: Type[Command], handler: Type[Any] | Callable[..., Any]) -> DomainModule:
+    def command(self, cmd_type: Type[Command], handler: Type[Any] | Callable[..., Any]) -> "DomainModule":
         self._commands.append((cmd_type, handler))
         return self
 
-    def query(self, query_type: Type[Query], handler: Type[Any] | Callable[..., Any]) -> DomainModule:
+    def query(self, query_type: Type[Query], handler: Type[Any] | Callable[..., Any]) -> "DomainModule":
         self._queries.append((query_type, handler))
         return self
 
-    def on_event(self, event_type: type, handler: Any) -> DomainModule:
+    def on_event(self, event_type: type, handler: Any) -> "DomainModule":
         self._event_handlers.append((event_type, handler))
         return self
 

@@ -18,6 +18,8 @@ Main public types and where to import them from. For full signatures, see the so
 
 ## Domain (`urich.domain`)
 
+Import from this package, e.g. `from urich.domain import EventBus`, `from urich.domain import Repository`, etc.
+
 | Symbol | Description |
 |--------|-------------|
 | `Entity` | Base for entities; equality by `id`. |

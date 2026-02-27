@@ -41,11 +41,13 @@ uvicorn main:app --reload
 - `POST /orders/commands/create_order`
 - `GET /orders/queries/get_order`
 
+These paths match the implementation: prefix `/orders`, then `/commands/...` or `/queries/...` with endpoint names in snake_case.
+
 The `orders` module in this example is a **DomainModule**: one object that declares aggregate, repository, command, query and event handler. You can scaffold it with the CLI or copy from the [ecommerce example](https://github.com/KashN9sh/urich/tree/main/examples/ecommerce).
 
 ## Using the CLI
 
-From an empty directory:
+Recommended sequence: **create-app** → **add-context** → **add-aggregate**. From an empty directory:
 
 ```bash
 urich create-app myapp
@@ -53,6 +55,8 @@ cd myapp
 urich add-context orders --dir .
 urich add-aggregate orders Order --dir .
 ```
+
+If the app directory or context already exists, existing files are **not overwritten** by default; use `--force` to overwrite. See [CLI](cli.md) for options and behavior.
 
 Then in `main.py` (or your app entrypoint):
 

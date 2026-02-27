@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Callable, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -12,7 +12,7 @@ class EventBus(Protocol):
     async def publish(self, event: object) -> None:
         ...
 
-    def subscribe(self, event_type: type, handler: Any) -> None:
+    def subscribe(self, event_type: type, handler: Callable[..., Any]) -> None:
         ...
 
 
@@ -31,9 +31,9 @@ class InProcessEventDispatcher:
     """Dispatcher: subscribe by event type, publish invokes handlers."""
 
     def __init__(self) -> None:
-        self._handlers: dict[type, list[Any]] = {}
+        self._handlers: dict[type, list[Callable[..., Any]]] = {}
 
-    def subscribe(self, event_type: type, handler: Any) -> None:
+    def subscribe(self, event_type: type, handler: Callable[..., Any]) -> None:
         if event_type not in self._handlers:
             self._handlers[event_type] = []
         self._handlers[event_type].append(handler)

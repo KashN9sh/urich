@@ -113,6 +113,100 @@ def on_{aggregate_lower}_created(event: {aggregate}Created) -> None:
 )
 '''
 
+# Append-only fragments for second and subsequent aggregates (append to end of file).
+DOMAIN_PY_APPEND = '''
+
+@dataclass
+class {aggregate}Created(DomainEvent):
+    """Event: {aggregate} created."""
+    {aggregate_lower}_id: str
+    # add fields
+
+
+@dataclass
+class {aggregate}:
+    id: str
+    # add fields
+'''
+
+APPLICATION_PY_APPEND = '''
+
+from .domain import {aggregate}, {aggregate}Created
+from .infrastructure import I{aggregate}Repository
+
+
+@dataclass
+class Create{aggregate}(Command):
+    {aggregate_lower}_id: str
+    # add fields
+
+
+@dataclass
+class Get{aggregate}(Query):
+    {aggregate_lower}_id: str
+
+
+class Create{aggregate}Handler:
+    def __init__(self, repo: I{aggregate}Repository, event_bus: EventBus):
+        self._repo = repo
+        self._event_bus = event_bus
+
+    async def __call__(self, cmd: Create{aggregate}) -> str:
+        agg = {aggregate}(id=cmd.{aggregate_lower}_id)
+        await self._repo.add(agg)
+        await self._event_bus.publish({aggregate}Created({aggregate_lower}_id=agg.id))
+        return agg.id
+
+
+class Get{aggregate}Handler:
+    def __init__(self, repo: I{aggregate}Repository):
+        self._repo = repo
+
+    async def __call__(self, query: Get{aggregate}):
+        agg = await self._repo.get(query.{aggregate_lower}_id)
+        if agg is None:
+            return None
+        return {{"id": agg.id}}
+'''
+
+INFRASTRUCTURE_PY_APPEND = '''
+
+from .domain import {aggregate}
+
+
+class I{aggregate}Repository(Repository["{aggregate}"]):
+    pass
+
+
+class {aggregate}RepositoryImpl(I{aggregate}Repository):
+    def __init__(self):
+        self._store: dict[str, {aggregate}] = {{}}
+
+    async def get(self, id: str) -> Optional[{aggregate}]:
+        return self._store.get(id)
+
+    async def add(self, aggregate: {aggregate}) -> None:
+        self._store[aggregate.id] = aggregate
+
+    async def save(self, aggregate: {aggregate}) -> None:
+        self._store[aggregate.id] = aggregate
+'''
+
+MODULE_PY_APPEND = '''
+
+from .domain import {aggregate}, {aggregate}Created
+from .application import Create{aggregate}, Create{aggregate}Handler, Get{aggregate}, Get{aggregate}Handler
+from .infrastructure import I{aggregate}Repository, {aggregate}RepositoryImpl
+
+
+def on_{aggregate_lower}_created(event: {aggregate}Created) -> None:
+    """Handler: when {aggregate} is created."""
+    ...
+
+
+{context}_module = {context}_module.aggregate({aggregate}).repository(I{aggregate}Repository, {aggregate}RepositoryImpl).command(Create{aggregate}, Create{aggregate}Handler).query(Get{aggregate}, Get{aggregate}Handler).on_event({aggregate}Created, on_{aggregate_lower}_created)
+'''
+
 MAIN_PY = '''"""Entry point: app is composed from modules."""
 from urich import Application
 

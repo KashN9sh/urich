@@ -25,6 +25,8 @@ orders_module = (
 - **`.query(query_type, handler)`** — One query type and one handler. Adds `GET` and `POST` for `/{prefix}/queries/{snake_case(query_type.__name__)}`.
 - **`.on_event(event_type, handler)`** — Subscribes the handler to the EventBus for this domain event. If no EventBus is registered, an in-process dispatcher is used automatically.
 
+**Event flow:** Register an EventBus (e.g. via EventBusModule) or rely on the automatic InProcess one. In the command handler, after persisting the aggregate, call `await event_bus.publish(...)`. In the module, subscribe with `.on_event(EventType, handler)`. Import: `from urich.domain import EventBus`.
+
 ---
 
 ## Project structure
@@ -56,9 +58,11 @@ Handlers can be:
 1. **A class** — Registered in the container and instantiated with constructor injection. The framework calls the instance with the command/query (handler must be callable: `__call__(self, cmd)` or `async __call__(self, cmd)`).
 2. **A function** — Called directly with the command/query. Can be async.
 
-Example class handler with DI. The handler publishes domain events via EventBus and returns the value that will be sent in the HTTP response:
+Example class handler with DI. Import EventBus from `urich.domain`. The handler publishes domain events via EventBus and returns the value that will be sent in the HTTP response:
 
 ```python
+from urich.domain import EventBus
+
 class CreateOrderHandler:
     def __init__(self, order_repository: IOrderRepository, event_bus: EventBus):
         self._repo = order_repository
@@ -77,9 +81,17 @@ The container resolves constructor dependencies (repositories, EventBus, etc.) b
 
 ## EventBus and event handlers
 
+Import the EventBus type from `urich.domain`: `from urich.domain import EventBus`.
+
 - If you registered **EventBusModule** (or another module that registers `EventBus`), that instance is used.
 - If not, DomainModule registers an **InProcessEventDispatcher** as the EventBus automatically.
 - `.on_event(OrderCreated, handler)` subscribes `handler` to `OrderCreated`. Handlers are invoked when you call `await event_bus.publish(event)` (e.g. from a command handler after saving the aggregate).
+
+---
+
+## Multiple aggregates
+
+One DomainModule can declare several aggregates: call `.aggregate()`, `.repository()`, `.command()`, `.query()`, `.on_event()` for each. When you add a second (or later) aggregate with the CLI (`urich add-aggregate <context> <AggregateName> --dir ...`), the command **appends** to the existing files instead of overwriting them. See [CLI](../cli.md) for details.
 
 ---
 
