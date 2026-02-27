@@ -53,12 +53,12 @@ Command/query names are derived from the dataclass name in snake_case (e.g. `Cre
 
 ## Handlers
 
-Handlers can be:
+You can use **either class handlers or function handlers** (or mix them in one app: e.g. one bounded context with classes, another with functions). Both get dependencies from the container.
 
-1. **A class** — Registered in the container and instantiated with constructor injection. The framework calls the instance with the command/query (handler must be callable: `__call__(self, cmd)` or `async __call__(self, cmd)`).
-2. **A function** — Called directly with the command/query. Can be async.
+1. **Class** — Registered in the container, instantiated with constructor injection. The framework calls the instance with the command/query (`__call__(self, cmd)` or `async __call__(self, cmd)`). Dependencies are resolved by parameter types in `__init__`.
+2. **Function** — First parameter is the command or query; **remaining parameters are injected from the container by type**. Can be sync or async. All parameters after the first must have a type annotation.
 
-Example class handler with DI. Import EventBus from `urich.domain`. The handler publishes domain events via EventBus and returns the value that will be sent in the HTTP response:
+**Example: class handler**
 
 ```python
 from urich.domain import EventBus
@@ -75,7 +75,20 @@ class CreateOrderHandler:
         return order.id
 ```
 
-The container resolves constructor dependencies (repositories, EventBus, etc.) by type.
+**Example: function handler** (same behaviour; dependencies in the signature)
+
+```python
+async def get_order(
+    query: GetOrder,
+    order_repository: IOrderRepository,
+):
+    order = await order_repository.get(query.order_id)
+    if order is None:
+        return None
+    return {"id": order.id, "customer_id": order.customer_id, "total_cents": order.total_cents}
+```
+
+Register with `.command(CreateOrder, CreateOrderHandler)` or `.query(GetOrder, get_order)`. In one module you can use classes for some commands/queries and functions for others.
 
 ---
 
